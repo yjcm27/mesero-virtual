@@ -8,8 +8,8 @@ Autores
 
 Proyecto desarrollado en equipo por:
 
-Youler (@yjcm27)
-Nixón
+Youler Cordoba (@yjcm27)
+Nixón Chavez
 Estado actual
 
 Este repositorio contiene el prototipo de la interfaz del cliente (versión 1.1). Funciona con datos de ejemplo y con un pago simulado. Todavía no tiene servidor ni base de datos.
