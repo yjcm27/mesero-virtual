@@ -81,13 +81,6 @@ python3 -m http.server 8000
 
 y entrar a `http://localhost:8000`.
 
-## Publicar en GitHub Pages
-
-1. Sube todo el contenido del proyecto a un repositorio público, conservando las carpetas `css/`, `js/` e `img/`.
-2. En **Settings → Pages**, elige **Deploy from a branch**, rama `main`, carpeta `/ (root)`.
-3. Espera uno o dos minutos y abre el enlace que aparece.
-
-Para actualizar, vuelve a subir los archivos modificados.
 
 ## Próximos pasos
 
