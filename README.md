@@ -124,9 +124,8 @@ HTML, CSS y JavaScript puro, sin librerías ni dependencias. Tipografía Bricola
 | Integrante | Rol | GitHub |
 |---|---|---|
 | Youler | Desarrollo del proyecto | [@yjcm27](https://github.com/yjcm27) |
-| Nixon | Colaborador | [@USUARIO-DE-NIXON](https://github.com/USUARIO-DE-NIXON) |
+| Nixon | Desarrollo del proyecto | [@nicwilmer-wq](https://github.com/nicwilmer-wq) |
 
-> Para completar: reemplaza `USUARIO-DE-NIXON` (en las dos partes de la fila) por el nombre de usuario de GitHub de tu compañero, y ajusta su rol si hace falta. Después borra esta nota.
 
 ## Cómo colaborar
 
