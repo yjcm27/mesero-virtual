@@ -1,0 +1,150 @@
+### Pruebas de la API de Mesero Virtual
+### Con la extensión "REST Client" de VS Code, pulsa "Send Request" sobre cada petición.
+### También sirven en Thunder Client o Postman (copiando método, URL y cuerpo).
+
+@host = http://localhost:3000
+
+### 1. Comprobar que el servidor responde
+GET {{host}}/api/salud
+
+### 2. Listar restaurantes
+GET {{host}}/api/restaurantes
+
+### 3. Listar los productos del restaurante 1
+GET {{host}}/api/productos?restauranteId=1
+
+### 4. CREAR un producto (debe responder 201)
+POST {{host}}/api/productos
+Content-Type: application/json
+
+{
+  "restauranteId": 1,
+  "nombre": "Burger BBQ Crispy",
+  "categoria": "Hamburguesas",
+  "precio": 30500,
+  "descripcion": "Carne de res, aros de cebolla crocantes y salsa BBQ.",
+  "ingredientes": ["Pan brioche", "Carne", "Aros de cebolla", "Salsa BBQ"],
+  "alergenos": ["Gluten", "Cebolla"],
+  "modo": "q",
+  "declaracion": true
+}
+
+### 5. VALIDACIÓN: sin declarar alérgenos (debe responder 400)
+POST {{host}}/api/productos
+Content-Type: application/json
+
+{
+  "restauranteId": 1,
+  "nombre": "Producto sin alérgenos declarados",
+  "categoria": "Pruebas",
+  "precio": 10000,
+  "descripcion": "Este producto no declara alérgenos.",
+  "ingredientes": ["Pan"],
+  "modo": "o",
+  "declaracion": true
+}
+
+### 6. VALIDACIÓN: precio 0 (debe responder 400)
+POST {{host}}/api/productos
+Content-Type: application/json
+
+{
+  "restauranteId": 1,
+  "nombre": "Producto con precio cero",
+  "categoria": "Pruebas",
+  "precio": 0,
+  "descripcion": "Este producto tiene un precio inválido.",
+  "ingredientes": ["Pan"],
+  "sinAlergenos": true,
+  "declaracion": true
+}
+
+### 7. NOMBRE REPETIDO: ejecuta de nuevo la petición 4 (debe responder 409)
+
+### 8. ACTUALIZAR el precio (cambia el 12 por el id que devolvió la petición 4)
+PUT {{host}}/api/productos/12
+Content-Type: application/json
+
+{
+  "nombre": "Burger BBQ Crispy",
+  "categoria": "Hamburguesas",
+  "precio": 32000,
+  "descripcion": "Carne de res, aros de cebolla crocantes y salsa BBQ.",
+  "ingredientes": ["Pan brioche", "Carne", "Aros de cebolla", "Salsa BBQ"],
+  "alergenos": ["Gluten", "Cebolla"],
+  "modo": "q",
+  "declaracion": true
+}
+
+### 9. Marcar agotado
+PATCH {{host}}/api/productos/12/disponibilidad
+Content-Type: application/json
+
+{ "disponible": false }
+
+### 10. ELIMINAR (debe responder 204)
+DELETE {{host}}/api/productos/12
+
+### ---------- PEDIDOS ----------
+
+### 11. Crear un pedido con una observación (debe responder 201 y estado "Enviando")
+POST {{host}}/api/pedidos
+Content-Type: application/json
+
+{
+  "restauranteId": 1,
+  "sesion": 1042,
+  "mesa": 8,
+  "items": [
+    { "productoId": 2, "cantidad": 2, "quitar": ["Cebolla caramelizada"], "observacion": "Alergia a la cebolla" },
+    { "productoId": 3, "cantidad": 1 }
+  ]
+}
+
+### 12. Pedir un producto agotado (debe responder 422). El producto 4 está agotado en el seed.
+POST {{host}}/api/pedidos
+Content-Type: application/json
+
+{ "restauranteId": 1, "sesion": 1042, "mesa": 8, "items": [ { "productoId": 4, "cantidad": 1 } ] }
+
+### 13. Confirmar el pago simulado (cambia el 1 por el id del pedido; pasa a "En espera")
+PATCH {{host}}/api/pedidos/1/pago
+Content-Type: application/json
+
+{ "confirmado": true }
+
+### 14. Vista de COCINA: solo pedidos pagados, en orden de llegada
+GET {{host}}/api/pedidos?restauranteId=1&vista=cocina
+
+### 15. REGLA: iniciar sin leer la observación (debe responder 422)
+PATCH {{host}}/api/pedidos/1/estado
+Content-Type: application/json
+
+{ "estado": "En preparación" }
+
+### 16. Cocina marca la observación como leída
+PATCH {{host}}/api/pedidos/1/observacion-leida
+
+### 17. Ahora sí: iniciar producción
+PATCH {{host}}/api/pedidos/1/estado
+Content-Type: application/json
+
+{ "estado": "En preparación" }
+
+### 18. Marcar listo
+PATCH {{host}}/api/pedidos/1/estado
+Content-Type: application/json
+
+{ "estado": "Listo" }
+
+### 19. REGLA: el cliente ya no puede cancelar (debe responder 422)
+PATCH {{host}}/api/pedidos/1/cancelar
+Content-Type: application/json
+
+{ "origen": "cliente" }
+
+### 20. Entregar
+PATCH {{host}}/api/pedidos/1/estado
+Content-Type: application/json
+
+{ "estado": "Entregado" }

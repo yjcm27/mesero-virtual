@@ -1,0 +1,17 @@
+{
+  "name": "mesero-virtual-backend",
+  "version": "1.0.0",
+  "description": "API REST de Mesero Virtual: módulos de Productos y Pedidos (Node.js + Express + MySQL)",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node --env-file=.env src/server.js",
+    "dev": "node --watch --env-file=.env src/server.js",
+    "test": "node --test"
+  },
+  "engines": { "node": ">=20.6" },
+  "dependencies": {
+    "express": "^4.19.2",
+    "mysql2": "^3.11.0"
+  }
+}
