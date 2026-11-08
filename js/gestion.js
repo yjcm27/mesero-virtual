@@ -1,14 +1,15 @@
-// ===== Mesero Virtual: gestión del menú del restaurante (CRUD con LocalStorage) =====
+// ===== Mesero Virtual: gestión del menú del restaurante (CRUD con la API) =====
 // C = crear (guardar con el formulario vacío)   R = leer (pintar la lista)
 // U = actualizar (editar y guardar)             D = eliminar
 const $ = (s) => document.querySelector(s);
 const ALERGENOS = ["Gluten", "Lácteos", "Huevo", "Pescado", "Soya", "Ajonjolí", "Nueces", "Maní", "Cebolla", "Ajo"];
 const MODOS = { q: "Ingredientes removibles", o: "Solo observaciones", n: "Sin personalización" };
 
-let rid = R[0].id;   // restaurante que se está gestionando
+let R = [];          // restaurantes (vienen de la API)
 let editId = null;   // id del producto en edición (null = producto nuevo)
 let imgActual = null; // foto del formulario como texto (data URL); null = sin foto
-const rest = () => R.find((r) => r.id === rid);
+let rid = null;      // restaurante que se está gestionando
+let lista = [];      // productos del restaurante actual (vienen de la API)
 const M = (n) => "$" + n.toLocaleString("es-CO");
 const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
@@ -42,42 +43,57 @@ function leerForm() {
 
   if (n.length < 3 || n.length > 60) return fallo("El nombre debe tener entre 3 y 60 caracteres.", "#f-n");
   if (/[<>]/.test([n, c, d, ing.join()].join(" "))) return fallo("No se permiten los símbolos < y >.", "#f-n");
-  if (rest().P.some((p) => p.id !== editId && p.n.toLowerCase() === n.toLowerCase())) return fallo("Ya existe un producto con ese nombre en este restaurante.", "#f-n");
+  if (lista.some((p) => p.id !== editId && p.n.toLowerCase() === n.toLowerCase())) return fallo("Ya existe un producto con ese nombre en este restaurante.", "#f-n");
   if (c.length < 3) return fallo("Escribe una categoría (mínimo 3 caracteres).", "#f-c");
+  if (c.length > 30) return fallo("La categoría no puede superar 30 caracteres.", "#f-c");
+  if (d.length < 10 || d.length > 140) return fallo("La descripción debe tener entre 10 y 140 caracteres.", "#f-d");
   if (!Number.isInteger(precio) || precio <= 0 || precio > 500000) return fallo("El precio debe ser un número entero mayor que 0 y hasta $500.000.", "#f-p");
   if (ing.length < 1) return fallo("Agrega al menos un ingrediente.", "#f-i");
   if (modo === "q" && ing.length < 2) return fallo("Para que el cliente pueda quitar ingredientes, el producto necesita al menos 2.", "#f-i");
   if (!sinAl && !al.length) return fallo("Declara los alérgenos: marca los que apliquen o «Sin alérgenos».");
   if (!$("#f-ack").checked) return fallo("Debes aceptar la declaración de alérgenos.", "#f-ack");
 
-  const p = { id: editId || "p" + Date.now(), n, e: $("#f-e").value.trim() || "🍽️", c, $: precio, d, i: ing, al: sinAl ? [] : al, m: modo };
+   const p = { n, c, $: precio, d, i: ing, al: sinAl ? [] : al, m: modo };
   if ($("#f-x").checked) p.x = 1; // x = agotado
   if (imgActual) p.img = imgActual; // foto del platillo
   return p;
 }
 
 // ---------- CREAR y ACTUALIZAR ----------
-function guardar(ev) {
+async function guardar(ev) {
   ev.preventDefault();
   const p = leerForm();
   if (!p) return;
-  const lista = rest().P, k = lista.findIndex((x) => x.id === p.id);
-  k >= 0 ? (lista[k] = p) : lista.push(p);
-  if (!guardarMenu(R)) return toast("No se pudo guardar: el navegador bloqueó LocalStorage.", 1);
-  toast(k >= 0 ? "Producto actualizado ✓" : "Producto creado ✓");
-  limpiar();
-  pintar();
+  const edicion = editId !== null, boton = $("#guardar");
+  boton.disabled = true;
+  try {
+    if (edicion) await actualizarProducto(rid, editId, p);
+    else await crearProducto(rid, p);
+    toast(edicion ? "Producto actualizado ✓" : "Producto creado ✓");
+    limpiar();
+    await cargar();
+  } catch (e) {
+    fallo(e.message);
+  } finally {
+    boton.disabled = false;
+  }
 }
 
+// Pide los productos a la API y pinta la lista
+async function cargar() {
+  try { lista = await listarProductos(rid); }
+  catch (e) { lista = []; toast(e.message, 1); }
+  pintar();
+}
 // ---------- LEER (pintar la lista) ----------
 function pintar() {
   const q = $("#q").value.trim().toLowerCase();
-  const prods = rest().P.filter((p) => !q || (p.n + " " + p.c).toLowerCase().includes(q));
-  $("#cuenta").textContent = `(${rest().P.length})`;
-  $("#cats").innerHTML = [...new Set(rest().P.map((p) => p.c))].map((c) => `<option value="${esc(c)}">`).join("");
+  const prods = lista.filter((p) => !q || (p.n + " " + p.c).toLowerCase().includes(q));
+  $("#cuenta").textContent = `(${lista.length})`;
+  $("#cats").innerHTML = [...new Set(lista.map((p) => p.c))].map((c) => `<option value="${esc(c)}">`).join("");
   $("#lista").innerHTML = prods.length ? prods.map((p) => `
     <div class="card">
-      <div class="row"><div class="emo">${p.img ? `<img src="${p.img}" alt="">` : esc(p.e)}</div>
+      <div class="emo">${p.img ? `<img src="${p.img}" alt="">` : esc(p.n.charAt(0).toUpperCase())}</div>
         <div class="col"><h3>${esc(p.n)} ${p.x ? '<span class="tag" style="color:var(--mut)">Agotado</span>' : ""}</h3>
           <div class="mut">${esc(p.c)} · <b class="price">${M(p.$)}</b></div>
           <div class="mut">${p.al.length ? "⚠ " + p.al.map(esc).join(" · ") : "Sin alérgenos"} · ${MODOS[p.m]}</div></div></div>
@@ -91,10 +107,10 @@ function pintar() {
 
 // ---------- ACTUALIZAR (cargar en el formulario) / ELIMINAR / AGOTADO ----------
 function editar(id) {
-  const p = rest().P.find((x) => x.id === id);
+  const p = lista.find((x) => x.id === id);
   if (!p) return;
   editId = id;
-  $("#f-n").value = p.n; $("#f-e").value = p.e; $("#f-c").value = p.c; $("#f-p").value = p.$;
+  $("#f-n").value = p.n; $("#f-c").value = p.c; $("#f-p").value = p.$;
   $("#f-d").value = p.d; $("#f-i").value = p.i.join(", "); $("#f-m").value = p.m; $("#f-x").checked = !!p.x;
   document.querySelectorAll(".al-op").forEach((x) => (x.checked = p.al.includes(x.value)));
   $("#alsin").checked = !p.al.length;
@@ -106,24 +122,26 @@ function editar(id) {
   $("#er").textContent = "";
   $("#form").scrollIntoView({ behavior: "smooth" });
 }
-
-function eliminar(id) {
-  const p = rest().P.find((x) => x.id === id);
+async function eliminar(id) {
+  const p = lista.find((x) => x.id === id);
   if (!p || !confirm(`¿Eliminar «${p.n}»? Esta acción no se puede deshacer.`)) return;
-  rest().P = rest().P.filter((x) => x.id !== id);
-  guardarMenu(R);
-  if (editId === id) limpiar();
-  pintar();
-  toast("Producto eliminado");
+  try {
+    await eliminarProducto(id);
+    if (editId === id) limpiar();
+    await cargar();
+    toast("Producto eliminado");
+  } catch (e) { toast(e.message, 1); }
 }
 
-function alternarAgotado(id) {
-  const p = rest().P.find((x) => x.id === id);
+async function alternarAgotado(id) {
+  const p = lista.find((x) => x.id === id);
   if (!p) return;
-  p.x ? delete p.x : (p.x = 1);
-  guardarMenu(R);
-  pintar();
-  toast(p.x ? "Marcado como agotado" : "Disponible de nuevo");
+  const agotar = !p.x;
+  try {
+    await cambiarDisponibilidad(id, !agotar);
+    await cargar();
+    toast(agotar ? "Marcado como agotado" : "Disponible de nuevo");
+  } catch (e) { toast(e.message, 1); }
 }
 
 function limpiar() {
@@ -198,9 +216,15 @@ $("#alerg").onchange = (e) => { // «Sin alérgenos» y los alérgenos concretos
 $("#lista").onclick = (e) => {
   const b = e.target.closest("button[data-a]");
   if (!b) return;
-  ({ edit: editar, del: eliminar, agot: alternarAgotado })[b.dataset.a](b.dataset.id);
+    ({ edit: editar, del: eliminar, agot: alternarAgotado })[b.dataset.a](Number(b.dataset.id));
 };
-$("#reiniciar").onclick = () => {
-  if (confirm("Se borrarán los cambios y volverán los datos de ejemplo. ¿Continuar?")) { reiniciarMenu(); location.reload(); }
-};
-pintar();
+$("#rest").onchange = (e) => { rid = Number(e.target.value); limpiar(); cargar(); };
+
+async function iniciar() {
+  try { R = await listarRestaurantes(); }
+  catch (e) { return toast(e.message, 1); }
+  $("#rest").innerHTML = R.map((r) => `<option value="${r.id}">${esc(r.nombre)}</option>`).join("");
+  rid = R[0].id;
+  await cargar();
+}
+iniciar();

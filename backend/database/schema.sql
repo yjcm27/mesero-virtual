@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS productos (
   ingredientes TEXT NOT NULL,          -- lista en formato JSON, por ejemplo ["Pan","Carne"]
   alergenos TEXT NOT NULL,             -- lista en formato JSON, por ejemplo ["Gluten","Lácteos"]
   modo CHAR(1) NOT NULL DEFAULT 'o',   -- q = quitar ingredientes, o = observaciones, n = sin personalización
-  imagen_url VARCHAR(255) NOT NULL DEFAULT '',
+  imagen_url MEDIUMTEXT NOT NULL DEFAULT (''),
   disponible TINYINT(1) NOT NULL DEFAULT 1,
   CONSTRAINT fk_productos_restaurante FOREIGN KEY (restaurante_id) REFERENCES restaurantes(id) ON DELETE CASCADE,
   UNIQUE KEY uq_producto_nombre (restaurante_id, nombre)

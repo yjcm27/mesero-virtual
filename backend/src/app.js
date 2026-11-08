@@ -10,7 +10,7 @@ import { manejarErrores } from './middlewares/manejarErrores.js';
 // Arma la aplicación Express con los servicios que recibe (inyección de dependencias).
 export function crearApp({ restauranteService, productoService, pedidoService }) {
   const app = express();
-  app.use(express.json({ limit: '100kb' }));
+  app.use(express.json({ limit: '2mb' }));
 
   // CORS: permite que el frontend (otra dirección) consuma la API
   app.use((req, res, next) => {
