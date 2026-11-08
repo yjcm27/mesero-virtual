@@ -37,3 +37,14 @@ const crearProducto = async (rid, p) => deApi(await pedir("/productos", { method
 const actualizarProducto = async (rid, id, p) => deApi(await pedir("/productos/" + id, { method: "PUT", body: JSON.stringify(aApi(p, rid)) }));
 const cambiarDisponibilidad = (id, disponible) => pedir("/productos/" + id + "/disponibilidad", { method: "PATCH", body: JSON.stringify({ disponible }) });
 const eliminarProducto = (id) => pedir("/productos/" + id, { method: "DELETE" });
+
+
+// Menú completo para la pantalla del cliente: restaurantes, cada uno con sus productos
+async function cargarMenuCliente() {
+  const restaurantes = await listarRestaurantes();
+  return Promise.all(restaurantes.map(async (r) => ({
+    id: r.id, n: r.nombre, c: r.categoria, loc: r.local,
+    t: r.tiempoPrepMin, tm: `${r.tiempoPrepMin}–${r.tiempoPrepMin + 5} min`,
+    P: await listarProductos(r.id)
+  })));
+}
