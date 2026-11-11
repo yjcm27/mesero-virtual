@@ -1,16 +1,10 @@
 // ===== Mesero Virtual: lógica de la interfaz del cliente =====
-// Los datos de los restaurantes están en datos.js
+// Los restaurantes y sus productos llegan de la API (ver iniciar() al final)
+let R = [];
 
 // ===== AYUDAS GENERALES =====
-// Dibujo en SVG para el Pan de Ajo (en vez de emoji)
-function garlicSvg() {
-  const sl = (y, dx) => {
-    const sp = [[-18, -3], [-8, 3], [2, -4], [12, 2], [20, -2], [-2, 5], [-14, 4]].map(([a, b]) => `<circle cx="${60 + dx + a}" cy="${y + b}" r="1.7" fill="#3f8a3c"/>`).join("");
-    return `<ellipse cx="${60 + dx}" cy="${y}" rx="35" ry="13" fill="#c0832f"/><ellipse cx="${60 + dx}" cy="${y - 1}" rx="31" ry="10.5" fill="#f2c872"/><ellipse cx="${60 + dx - 6}" cy="${y - 3}" rx="14" ry="3" fill="#fbe3a6" opacity=".8"/>${sp}`;
-  };
-  return `<svg viewBox="0 0 120 120" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Pan de ajo y hierbas"><rect width="120" height="120" fill="#8a5a33"/><path d="M0 30H120M0 62H120M0 94H120" stroke="#74482a" stroke-width="1.5"/><g transform="rotate(-8 60 60)">${sl(26, -2)}${sl(54, 4)}${sl(82, -3)}</g><path d="M96 84c-9 4-13 14-9 21 3 5 14 5 18 0 5-8-1-17-9-21z" fill="#f6f1e6" stroke="#d8cfb8" stroke-width="1"/></svg>`;
-}
-const SV = { p203: garlicSvg() }, pic = (p) => `<div class="emo">${SV[p.id] || p.e}</div>`;
+
+const pic = (p) => `<div class="emo">${p.img ? `<img src="${p.img}" alt="">` : esc(p.n.charAt(0).toUpperCase())}</div>`;
 
 // Atajos: $ busca un elemento, M da formato de pesos
 const $ = (s) => document.querySelector(s), M = (n) => "$" + n.toLocaleString("es-CO");
@@ -95,7 +89,7 @@ function scan() {
 function vRests() {
   return `<h1>¿Qué se te antoja hoy?</h1><p class="mut">Cada restaurante tiene su propio carrito y su propio pedido.</p>` + R.map((r) => {
     const n = (S.carts[r.id] || []).reduce((s, i) => s + i.q, 0);
-    return `<button class="card row" style="width:100%;text-align:left" onclick="S.rid=${r.id};S.cat='ALL';S.v='menu';render()"><div class="emo">${r.e}</div><div class="col"><h3>${r.n}</h3><div class="mut">${r.c}</div><div class="mut">${r.loc} · ⭐ ${r.r} · ⏱ ${r.tm}</div><div class="mut" style="margin-top:4px">${r.d}</div></div>${n ? `<span class="tag" style="color:var(--acc)">🛒 ${n}</span>` : '<b style="color:var(--acc)">›</b>'}</button>`;
+    return `<button class="card row" style="width:100%;text-align:left" onclick="S.rid=${r.id};S.cat='ALL';S.v='menu';render()"><div class="emo">${esc(r.n.charAt(0).toUpperCase())}</div><div class="col"><h3>${r.n}</h3><div class="mut">${r.c}</div><div class="mut">${r.loc} · ⏱ ${r.tm}</div></div>${n ? `<span class="tag" style="color:var(--acc)">🛒 ${n}</span>` : '<b style="color:var(--acc)">›</b>'}</button>`;
   }).join("");
 }
 
@@ -103,7 +97,7 @@ function vRests() {
 function vMenu() {
   const r = R_(S.rid);
   return `<div class="row"><button class="btn alt" onclick="S.v='rests';render()" aria-label="Volver">←</button><h2>${r.n}</h2></div><div class="chips">${["ALL", ...new Set(r.P.map((p) => p.c))].map((c) => `<button class="chip ${c === S.cat ? "on" : ""}" onclick="S.cat='${c}';render()">${c === "ALL" ? "Todo" : c}</button>`).join("")}</div>` + r.P.filter((p) => S.cat === "ALL" || p.c === S.cat).map((p) => `<div class="card"><div class="row"><div class="emo">${pic(p).replace(/^<div class="emo">|<\/div>$/g, "")}</div><div class="col"><h3>${p.n}</h3><div class="mut">${p.d}</div><div class="mut" style="margin-top:2px">${p.al.length ? "⚠ " + p.al.join(" · ") : "Sin alérgenos declarados"}</div></div></div>
- <div class="row sp" style="margin-top:10px"><span class="price">${M(p.$)}</span>${p.x ? '<span class="tag" style="color:var(--mut)">Agotado</span>' : `<button class="btn" onclick="prod('${p.id}')">+ Agregar</button>`}</div></div>`).join("");
+ <div class="row sp" style="margin-top:10px"><span class="price">${M(p.$)}</span>${p.x ? '<span class="tag" style="color:var(--mut)">Agotado</span>' : `<button class="btn" onclick="prod(${p.id})">+ Agregar</button>`}</div></div>`).join("");
 }
 
 // ===== PRODUCTO Y CARRITO =====
@@ -117,7 +111,7 @@ function prod(id) {
 
 function ps() {
   const { p, q, rm } = S.t;
-  sh(`<div class="row sp"><h2>${p.e} ${p.n}</h2><button class="btn alt" onclick="cl()" aria-label="Cerrar">✕</button></div>
+  sh(`<div class="row sp"><h2>${p.n}</h2><button class="btn alt" onclick="cl()" aria-label="Cerrar">✕</button></div>
  <h3 style="margin-top:12px">Ingredientes</h3>` + (p.m === "q" ? p.i.map((x, k) => `<label class="row" style="min-height:40px"><input type="checkbox" ${rm.includes(x) ? "" : "checked"} onchange="tg(${k},this.checked)"> ${x}</label>`).join("") + `<div class="mut">Desmarca lo que no quieras.</div>` : `<p class="mut">${p.i.join(" · ")}</p>`) + `<div class="al"><b>⚠ Alérgenos:</b> ${p.al.length ? p.al.join(", ") : "ninguno declarado"}.<br>Si tienes una alergia grave, confírmala con el restaurante.</div>` + (p.al.length ? `<label class="row ack"><input type="checkbox" id="ack" ${S.t.ack ? "checked" : ""} onchange="S.t.ack=this.checked;this.closest('label').classList.remove('inv');$('#er').textContent=''"> Leí los alérgenos y sé que debo confirmar con el restaurante si tengo una alergia grave.</label>` : "") + (p.m !== "n" ? `<h3>Observaciones</h3><textarea maxlength="140" placeholder="Alergias, restricciones o peticiones especiales" oninput="S.t.obs=this.value;$('#cnt').textContent=this.value.length+'/140'">${esc(S.t.obs)}</textarea><div class="mut" id="cnt" style="text-align:right">${S.t.obs.length}/140</div>` : "") + `<div id="er" class="err" role="alert"></div><div class="row sp" style="margin-top:12px"><div class="qty"><button onclick="qd(-1)" aria-label="Menos">−</button><b>${q}</b><button onclick="qd(1)" aria-label="Más">+</button></div><button class="btn col" onclick="addC()">Agregar · ${M(p.$ * q)}</button></div>`);
 }
 
@@ -332,5 +326,10 @@ setInterval(() => document.querySelectorAll("[data-t]").forEach((e) => {
   e.textContent = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
 }), 1000);
 
-render();
+async function iniciar() {
+  try { R = await cargarMenuCliente(); }
+  catch (e) { toast(e.message, 1); }
+  render();
+}
+iniciar();
 

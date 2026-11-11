@@ -538,3 +538,6 @@ textarea {
     background: var(--red);
     color: #fff;
 }
+/* Foto de producto dentro del cuadro pequeño: llena el cuadro sin deformarse */
+.emo { overflow: hidden; }
+.emo img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: inherit; }
