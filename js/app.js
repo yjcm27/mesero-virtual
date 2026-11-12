@@ -174,13 +174,14 @@ function pay(rid, tot) {
 }
 
 // Envía el pedido (bloquea el doble toque)
-function place(rid) {
+async function place(rid) {
   if (S.busy) return;
   if (!S.sess || S.closed) {
     cl();
     return toast("Tu sesión está cerrada. Escanea el QR de nuevo.", 1);
   }
-  if (!(S.carts[rid] || []).length) {
+  const c = S.carts[rid] || [];
+  if (!c.length) {
     cl();
     return toast("Tu carrito está vacío o el pedido ya se envió.", 1);
   }
@@ -190,18 +191,30 @@ function place(rid) {
     bt.disabled = true;
     bt.textContent = "Enviando…";
   }
-  setTimeout(() => {
-    S.busy = 0;
-    const c = S.carts[rid] || [];
-    if (!S.sess || !c.length) return;
-    const total = c.reduce((s, i) => s + i.p.$ * i.q, 0), q = S.sess.seq[rid] = (S.sess.seq[rid] || 0) + 1, o = { id: ++S.oid, rid, no: `${S.sess.n}-R${rid}-${String(q).padStart(2, "0")}`, items: c, total, st: "Enviando", t0: 0, al: false };
-    S.orders.push(o);
+  try {
+    const r = await crearPedido({
+      restauranteId: rid, sesion: S.sess.n, mesa: 8,
+      items: c.map((l) => ({
+        productoId: l.p.id, cantidad: l.q,
+        ...(l.rm.length ? { quitar: l.rm } : {}),
+        ...(l.obs ? { observacion: l.obs } : {})
+      }))
+    });
+    S.orders.push({ id: r.id, rid, no: r.numero, items: c, total: r.total, st: r.estado, t0: 0, al: false });
     S.carts[rid] = [];
     S.v = "orders";
     cl();
     render();
     toast("Pedido enviado ✓");
-  }, 700);
+  } catch (e) {
+    if (bt) {
+      bt.disabled = false;
+      bt.textContent = "Confirmar pago (simulado)";
+    }
+    toast(e.message, 1);
+  } finally {
+    S.busy = 0;
+  }
 }
 
 // ===== PEDIDOS =====
@@ -223,12 +236,15 @@ function vOrders() {
 const ord = (id) => S.orders.find((o) => o.id === id);
 
 // Avanza el estado del pedido (botones Demo que hacen de cocina)
-function adv(id) {
+async function adv(id) {
   const o = ord(id);
   if (!o || ["Entregado", "Cancelado", "Pago no confirmado"].includes(o.st)) return;
   if (o.st === "Enviando") {
-    o.st = "En espera";
-    o.t0 = Date.now();
+    try {
+      const r = await confirmarPago(id, true);
+      o.st = r.estado;
+      o.t0 = Date.now();
+    } catch (e) { return toast(e.message, 1); }
   } else {
     o.st = PATH[PATH.indexOf(o.st) + 1];
     if (o.st === "Listo") ring(o);
@@ -236,13 +252,17 @@ function adv(id) {
   render();
 }
 
-function nopay(id) {
-  if (ord(id).st !== "Enviando") return;
-  ord(id).st = "Pago no confirmado";
+async function nopay(id) {
+  const o = ord(id);
+  if (!o || o.st !== "Enviando") return;
+  try {
+    const r = await confirmarPago(id, false);
+    o.st = r.estado;
+  } catch (e) { return toast(e.message, 1); }
   render();
 }
 
-function retry(id) {
+async function retry(id) {
   const o = ord(id);
   if (o.st !== "Pago no confirmado") return;
   o.st = "Enviando";
