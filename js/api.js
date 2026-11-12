@@ -48,3 +48,7 @@ async function cargarMenuCliente() {
     P: await listarProductos(r.id)
   })));
 }
+
+// ===== Pedidos =====
+const crearPedido = (pedido) => pedir("/pedidos", { method: "POST", body: JSON.stringify(pedido) });
+const confirmarPago = (id, confirmado) => pedir("/pedidos/" + id + "/pago", { method: "PATCH", body: JSON.stringify({ confirmado }) });
