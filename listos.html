@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1b1626">
+<title>Mesero Virtual — Pedidos listos</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/mostrador.css">
+</head>
+<body class="pantalla">
+    <header>
+        <img class="lg l" alt="Mesero Virtual" style="height:56px" src="img/logo-claro.png">
+        <img class="lg d" alt="" style="height:56px" src="img/logo-oscuro.png">
+        <div>
+            <h1 id="nombre">Pedidos listos</h1>
+            <div class="sub">Cuando veas tu número, pasa por el mostrador</div>
+        </div>
+        <button id="sonido" type="button">🔇 Sonido apagado</button>
+    </header>
+    <main id="grid"></main>
+
+    <script src="js/datos.js"></script>
+    <script src="js/almacen.js"></script>
+    <script src="js/listos.js"></script>
+</body>
+</html>
