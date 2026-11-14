@@ -52,3 +52,10 @@ async function cargarMenuCliente() {
 // ===== Pedidos =====
 const crearPedido = (pedido) => pedir("/pedidos", { method: "POST", body: JSON.stringify(pedido) });
 const confirmarPago = (id, confirmado) => pedir("/pedidos/" + id + "/pago", { method: "PATCH", body: JSON.stringify({ confirmado }) });
+
+
+// ===== Pedidos: Cocina y cambios de estado =====
+const listarPedidosCocina = (rid) => pedir("/pedidos?restauranteId=" + rid + "&vista=cocina");
+const marcarObservacionLeida = (id) => pedir("/pedidos/" + id + "/observacion-leida", { method: "PATCH" });
+const cambiarEstado = (id, estado) => pedir("/pedidos/" + id + "/estado", { method: "PATCH", body: JSON.stringify({ estado }) });
+const cancelarPedido = (id, origen, motivo = "") => pedir("/pedidos/" + id + "/cancelar", { method: "PATCH", body: JSON.stringify({ origen, motivo }) });
