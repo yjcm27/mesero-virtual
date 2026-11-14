@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1b1626">
+<title>Mesero Virtual — Administrador</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/mostrador.css">
+<link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+<div id="app" class="ancha">
+    <!-- Encabezado -->
+    <div class="top">
+        <img class="lg l" alt="Mesero Virtual" style="height:38px" src="img/logo-claro.png">
+        <img class="lg d" alt="" style="height:38px" src="img/logo-oscuro.png">
+        <div class="col"><b>Administrador</b><div class="mut">Ventas, pedidos y configuración</div></div>
+    </div>
+
+    <label for="rest" class="mut">Restaurante (sesión simulada)</label>
+    <select id="rest"></select>
+
+    <!-- El Administrador también puede entrar a las demás vistas del restaurante -->
+    <div class="enlaces">
+        <a class="btn alt" href="gestion.html">🍔 Menú</a>
+        <a class="btn alt" href="cocina.html">🔥 Cocina</a>
+        <a class="btn alt" href="mostrador.html">🧾 Mostrador</a>
+    </div>
+
+    <div class="chips" id="secciones"></div>
+    <div id="contenido"></div>
+</div>
+
+<!-- Ventana para cancelar un pedido con motivo -->
+<div id="modal" class="modal hide" role="dialog" aria-modal="true" aria-labelledby="modal-titulo">
+    <div class="caja">
+        <h2 id="modal-titulo">Cancelar pedido</h2>
+        <p class="mut" id="modal-info"></p>
+        <div class="note hide" id="modal-aviso"></div>
+        <label for="motivo" class="mut">Motivo de la cancelación (el cliente lo recibirá)</label>
+        <div class="chips" id="motivos"></div>
+        <textarea id="motivo" maxlength="120" placeholder="Ej: Se agotó un ingrediente"></textarea>
+        <div class="mut" id="cuenta" style="text-align:right">0/120</div>
+        <div class="err" id="er-motivo" role="alert"></div>
+        <div class="botones">
+            <button class="btn red" id="confirmar" type="button">Cancelar pedido</button>
+            <button class="btn alt" id="volver" type="button">Volver</button>
+        </div>
+    </div>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script src="js/datos.js"></script>
+<script src="js/almacen.js"></script>
+<script src="js/admin.js"></script>
+</body>
+</html>
