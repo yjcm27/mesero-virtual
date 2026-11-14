@@ -174,13 +174,14 @@ function pay(rid, tot) {
 }
 
 // Envía el pedido (bloquea el doble toque)
-function place(rid) {
+async function place(rid) {
   if (S.busy) return;
   if (!S.sess || S.closed) {
     cl();
     return toast("Tu sesión está cerrada. Escanea el QR de nuevo.", 1);
   }
-  if (!(S.carts[rid] || []).length) {
+  const c = S.carts[rid] || [];
+  if (!c.length) {
     cl();
     return toast("Tu carrito está vacío o el pedido ya se envió.", 1);
   }
@@ -190,18 +191,30 @@ function place(rid) {
     bt.disabled = true;
     bt.textContent = "Enviando…";
   }
-  setTimeout(() => {
-    S.busy = 0;
-    const c = S.carts[rid] || [];
-    if (!S.sess || !c.length) return;
-    const total = c.reduce((s, i) => s + i.p.$ * i.q, 0), q = S.sess.seq[rid] = (S.sess.seq[rid] || 0) + 1, o = { id: ++S.oid, rid, no: `${S.sess.n}-R${rid}-${String(q).padStart(2, "0")}`, items: c, total, st: "Enviando", t0: 0, al: false };
-    S.orders.push(o);
+  try {
+    const r = await crearPedido({
+      restauranteId: rid, sesion: S.sess.n, mesa: 8,
+      items: c.map((l) => ({
+        productoId: l.p.id, cantidad: l.q,
+        ...(l.rm.length ? { quitar: l.rm } : {}),
+        ...(l.obs ? { observacion: l.obs } : {})
+      }))
+    });
+    S.orders.push({ id: r.id, rid, no: r.numero, items: c, total: r.total, st: r.estado, t0: 0, al: false });
     S.carts[rid] = [];
     S.v = "orders";
     cl();
     render();
     toast("Pedido enviado ✓");
-  }, 700);
+  } catch (e) {
+    if (bt) {
+      bt.disabled = false;
+      bt.textContent = "Confirmar pago (simulado)";
+    }
+    toast(e.message, 1);
+  } finally {
+    S.busy = 0;
+  }
 }
 
 // ===== PEDIDOS =====
@@ -217,44 +230,67 @@ function vOrders() {
   return `<h1>Mis pedidos</h1><p class="mut">Sesión #${S.sess.n} · cada restaurante tiene su pedido.</p>` + (S.plat === "ios" && live ? `<div class="note">🍎 Apple no permite enviar avisos sin instalar una app. Mantén esta página abierta y revisa el cronómetro; también verás tu pedido en la pantalla del restaurante.</div>` : "") + (L.length ? L.map((o) => {
     const i = PATH.indexOf(o.st), w = ["En espera", "En preparación"].includes(o.st);
     return `<div class="card"><div class="row sp"><h3>#${o.no}</h3>${tag(o.st)}</div><div class="mut">${R_(o.rid).n} · ${M(o.total)}</div>
- <div style="margin-top:6px">${o.items.map((l) => `<div>${l.q}× ${l.p.n}${lines(l)}</div>`).join("")}</div>` + (i >= 0 ? `<div class="steps">${PATH.map((s, k) => `<div class="stp ${k <= i ? "on" : ""}"><i></i>${s}</div>`).join("")}</div>` : "") + (w ? `<div class="row sp"><span class="mut">Tiempo estimado: <b style="color:var(--tx)">${est(o)}</b></span><span class="mut">⏱ <b data-t="${o.t0}">0:00</b></span></div>` : "") + (o.st === "Enviando" ? `<div class="mut">Esperando el comprobante de pago…</div><button class="btn demo full" onclick="adv(${o.id})">▶ Demo: llega el comprobante</button><button class="btn demo full" onclick="nopay(${o.id})">▶ Demo: pasan 5 min sin comprobante</button>` : "") + (o.st === "Pago no confirmado" ? `<div class="note">No pudimos confirmar el pago. Puedes reintentar sin duplicar el pedido.</div><button class="btn full" onclick="retry(${o.id})">Reintentar pago</button>` : "") + (o.st === "En espera" ? `<button class="btn alt full" onclick="cancel(${o.id})">Cancelar pedido</button>` : "") + (o.st === "Cancelado" ? `<div class="mut">Reembolso pendiente.</div>` : "") + (o.st === "Listo" ? `<div class="note" style="border-color:var(--ok)">✅ ¡Tu pedido está listo! Pasa por él al restaurante.</div>` : "") + (S.plat === "android" && (w || o.st === "Enviando") ? `<button class="btn ${o.al ? "ok" : "alt"} full" onclick="o_al(${o.id})">${o.al ? "🔔 Aviso activado (se repite 2–3 veces, cada 30 s)" : "🔔 Avísame cuando esté listo"}</button>` : "") + (w || o.st === "Listo" ? `<button class="btn demo full" onclick="adv(${o.id})">▶ Demo: ${o.st === "En espera" ? "cocina inicia producción" : o.st === "En preparación" ? "cocina termina el pedido" : "mostrador entrega"}</button>` : "") + `</div>`;
+ <div style="margin-top:6px">${o.items.map((l) => `<div>${l.q}× ${l.p.n}${lines(l)}</div>`).join("")}</div>` + (i >= 0 ? `<div class="steps">${PATH.map((s, k) => `
+  <div class="stp ${k <= i ? "on" : ""}"><i></i>${s}
+  </div>`).join("")}</div>` : "") + (w ? `
+    <div class="row sp"><span class="mut">Tiempo estimado: <b style="color:var(--tx)">${est(o)}</b></span>
+    <span class="mut">⏱ <b data-t="${o.t0}">0:00</b></span></div>` : "") + (o.st === "Enviando" ? `<div class="mut">Esperando el comprobante de pago…</div>
+      <button class="btn demo full" onclick="adv(${o.id})">▶ Demo: llega el comprobante</button>
+      <button class="btn demo full" onclick="nopay(${o.id})">▶ Demo: pasan 5 min sin comprobante</button>` : "") + (o.st === "Pago no confirmado" ? `
+        <div class="note">No pudimos confirmar el pago. Puedes reintentar sin duplicar el pedido.</div><button class="btn full" onclick="retry(${o.id})">Reintentar pago</button>` : "") + (o.st === "En espera" ? `
+          <button class="btn alt full" onclick="cancel(${o.id})">Cancelar pedido</button>` : "") + (o.st === "Cancelado" ? `<div class="mut">Reembolso pendiente.</div>` : "") + (o.st === "Listo" ? `<div class="note" style="border-color:var(--ok)">✅ ¡Tu pedido está listo! Pasa por él al restaurante.</div>` : "") + (S.plat === "android" && (w || o.st === "Enviando") ? `
+          <button class="btn ${o.al ? "ok" : "alt"} full" onclick="o_al(${o.id})">${o.al ? "🔔 Aviso activado (se repite 2–3 veces, cada 30 s)" : "🔔 Avísame cuando esté listo"}</button>` : "") + (o.st === "Listo" ? `<button class="btn demo full" onclick="adv(${o.id})">▶ Demo: mostrador entrega</button>` : "") + `</div>`;
   }).join("") : `<div class="card" style="text-align:center"><div style="font-size:40px">🧾</div><p class="mut">Aún no tienes pedidos en esta sesión.</p></div>`);
 }
 const ord = (id) => S.orders.find((o) => o.id === id);
 
-// Avanza el estado del pedido (botones Demo que hacen de cocina)
-function adv(id) {
+// Avanza el estado del pedido (reintenta el pago si es necesario) y avisa al cliente si el pedido está listo
+async function adv(id) {
   const o = ord(id);
   if (!o || ["Entregado", "Cancelado", "Pago no confirmado"].includes(o.st)) return;
-  if (o.st === "Enviando") {
-    o.st = "En espera";
-    o.t0 = Date.now();
-  } else {
-    o.st = PATH[PATH.indexOf(o.st) + 1];
-    if (o.st === "Listo") ring(o);
-  }
+  try {
+    const antes = o.st;
+    const r = antes === "Enviando" ? await confirmarPago(id, true) : await cambiarEstado(id, PATH[PATH.indexOf(antes) + 1]);
+    o.st = r.estado;
+    if (r.pagadoEn) o.t0 = r.pagadoEn;
+    if (o.st === "Listo" && antes !== "Listo") ring(o);
+  } catch (e) { toast(e.message, 1); }
   render();
 }
 
-function nopay(id) {
-  if (ord(id).st !== "Enviando") return;
-  ord(id).st = "Pago no confirmado";
-  render();
-}
-
-function retry(id) {
+async function nopay(id) {
   const o = ord(id);
-  if (o.st !== "Pago no confirmado") return;
-  o.st = "Enviando";
+  if (!o || o.st !== "Enviando") return;
+  try {
+    const r = await confirmarPago(id, false);
+    o.st = r.estado;
+  } catch (e) { return toast(e.message, 1); }
+  render();
+}
+
+async function retry(id) {
+  const o = ord(id);
+  if (!o || o.st !== "Pago no confirmado") return;
+  try {
+    const r = await confirmarPago(id, true);
+    o.st = r.estado;
+    if (r.pagadoEn) o.t0 = r.pagadoEn;
+  } catch (e) { return toast(e.message, 1); }
   render();
 }
 
 // Cancelación: solo permitida en "En espera"
-function doCancel(id) {
+async function doCancel(id) {
   const o = ord(id);
   cl();
-  if (o.st !== "En espera") return toast("Ya no puedes cancelar: cocina inició la producción.", 1);
-  o.st = "Cancelado";
+  if (!o) return;
+  try {
+    const r = await cancelarPedido(id, "cliente");
+    o.st = r.estado;
+  } catch (e) {
+    toast(e.message, 1);
+    return sincronizar();
+  }
   render();
   toast("Pedido cancelado");
 }
@@ -333,3 +369,22 @@ async function iniciar() {
 }
 iniciar();
 
+
+// Consulta la API cada 3 segundos para enterarse de los cambios que hace Cocina
+async function sincronizar() {
+  if (!S.sess) return;
+  let cambio = false;
+  for (const o of S.orders.filter((x) => !["Entregado", "Cancelado"].includes(x.st))) {
+    try {
+      const r = await obtenerPedido(o.id);
+      if (r.estado !== o.st) {
+        o.st = r.estado;
+        if (r.pagadoEn) o.t0 = r.pagadoEn;
+        cambio = true;
+        if (o.st === "Listo") ring(o);
+      }
+    } catch (e) { /* sin conexión: se intenta de nuevo en el próximo ciclo */ }
+  }
+  if (cambio) render();
+}
+setInterval(sincronizar, 3000);

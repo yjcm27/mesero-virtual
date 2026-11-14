@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1b1626">
+<title>Mesero Virtual — Mostrador</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/mostrador.css">
+</head>
+<body>
+<div id="app" class="ancha">
+    <!-- Encabezado -->
+    <div class="top">
+        <img class="lg l" alt="Mesero Virtual" style="height:38px" src="img/logo-claro.png">
+        <img class="lg d" alt="" style="height:38px" src="img/logo-oscuro.png">
+        <div class="col"><b>Mostrador</b><div class="mut">Consulta, entrega y avisos al cliente</div></div>
+        <a class="btn alt" style="display:grid;place-items:center;text-decoration:none" href="cocina.html">Cocina</a>
+    </div>
+
+    <label for="rest" class="mut">Restaurante (sesión simulada)</label>
+    <select id="rest"></select>
+
+    <!-- Control de la pantalla de pedidos listos -->
+    <div class="card" id="pantalla"></div>
+
+    <div class="chips" id="tabs"></div>
+    <div id="lista"></div>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script src="js/datos.js"></script>
+<script src="js/almacen.js"></script>
+<script src="js/mostrador.js"></script>
+</body>
+</html>

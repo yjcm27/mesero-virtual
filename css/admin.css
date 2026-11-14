@@ -1,0 +1,32 @@
+/* ===== Panel del Administrador (usa las variables de styles.css) ===== */
+
+.enlaces { display: flex; gap: 8px; margin-top: 10px; }
+.enlaces .btn { flex: 1; display: grid; place-items: center; text-decoration: none; }
+
+.navegador { display: flex; gap: 8px; align-items: center; margin: 10px 0; }
+.navegador .btn { min-width: 48px; }
+.navegador b { flex: 1; text-align: center; }
+.navegador b::first-letter { text-transform: uppercase; }
+
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 10px 0; }
+.kpi { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px; }
+.kpi .valor { font-size: 22px; font-weight: 800; color: var(--acc); }
+
+.barras { display: flex; align-items: flex-end; gap: 3px; height: 150px; margin-top: 10px; border-bottom: 1px solid var(--line); }
+.barra { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; min-width: 0; }
+.barra i { display: block; width: 100%; background: var(--acc); border-radius: 4px 4px 0 0; min-height: 2px; }
+.etiquetas { display: flex; gap: 3px; font-size: 10px; color: var(--mut); }
+.etiquetas span { flex: 1; text-align: center; min-width: 0; }
+
+.top5 .fila { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+.top5 .nombre { flex: 0 0 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.top5 .tira { flex: 1; background: var(--line); border-radius: 6px; height: 12px; }
+.top5 .tira i { display: block; height: 100%; background: var(--acc); border-radius: 6px; }
+
+.campo label { display: block; font-weight: 700; font-size: 13px; margin-top: 12px; }
+.campo input { width: 100%; min-height: 44px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); color: var(--tx); font: inherit; padding: 0 12px; }
+.campo input.bad, #motivo.bad { border-color: var(--red); }
+
+.modal { position: fixed; inset: 0; z-index: 80; background: rgba(0, 0, 0, .55); display: grid; place-items: center; padding: 16px; }
+.modal .caja { background: var(--bg); border-radius: 18px; padding: 18px; width: 100%; max-width: 480px; max-height: 92vh; overflow: auto; }
+#motivo { width: 100%; min-height: 80px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); color: var(--tx); font: inherit; padding: 10px; }
