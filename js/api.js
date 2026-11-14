@@ -59,3 +59,4 @@ const listarPedidosCocina = (rid) => pedir("/pedidos?restauranteId=" + rid + "&v
 const marcarObservacionLeida = (id) => pedir("/pedidos/" + id + "/observacion-leida", { method: "PATCH" });
 const cambiarEstado = (id, estado) => pedir("/pedidos/" + id + "/estado", { method: "PATCH", body: JSON.stringify({ estado }) });
 const cancelarPedido = (id, origen, motivo = "") => pedir("/pedidos/" + id + "/cancelar", { method: "PATCH", body: JSON.stringify({ origen, motivo }) });
+const obtenerPedido = (id) => pedir("/pedidos/" + id);
