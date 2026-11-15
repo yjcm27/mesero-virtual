@@ -15,6 +15,50 @@ const S = { cat: "ALL", v: "qr", rid: null, sess: null, carts: {}, orders: [], p
 // Orden de los estados del pedido y color de cada uno
 const PATH = ["En espera", "En preparación", "Listo", "Entregado"], COL = { "Enviando": "--blue", "En espera": "--acc", "En preparación": "--blue", "Listo": "--ok", "Entregado": "--mut", "Cancelado": "--red", "Pago no confirmado": "--red" };
 
+// ===== PERSISTENCIA DE LA SESIÓN (sobrevive a recargar la página) =====
+const KEY = "mv_sesion";
+
+function guardar() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify({
+      n: S.n, closed: S.closed, sess: S.sess,
+      orders: S.orders.map((o) => ({
+        id: o.id, rid: o.rid, no: o.no, total: o.total, st: o.st, t0: o.t0, al: o.al,
+        items: o.items.map((l) => ({ pid: l.p.id, q: l.q, rm: l.rm || [], obs: l.obs || "" }))
+      }))
+    }));
+  } catch (e) { /* almacenamiento lleno o bloqueado: se sigue sin guardar */ }
+}
+
+function restaurar() {
+  try {
+    if (!R.length) return;                       // sin menú no se restaura nada
+    const d = JSON.parse(localStorage.getItem(KEY) || "null");
+    if (!d || !d.sess) return;
+
+    const orders = [];
+    for (const o of d.orders || []) {
+      const r = R_(o.rid);
+      if (!r || !Array.isArray(o.items)) continue;   // restaurante que ya no existe: se descarta
+      orders.push({
+        ...o,
+        items: o.items.map((l) => ({
+          q: l.q, rm: l.rm || [], obs: l.obs || "",
+          p: r.P.find((x) => x.id === l.pid) || { id: l.pid, n: "Producto", $: 0, al: [], i: [] }
+        }))
+      });
+    }
+
+    S.n = Math.max(S.n, d.n || 0);
+    S.closed = !!d.closed;
+    S.sess = d.sess;
+    S.orders = orders;
+    S.v = orders.length ? "orders" : "rests";
+  } catch (e) {
+    console.error("Sesión guardada inválida, se descarta:", e);
+    localStorage.removeItem(KEY);                // si algo falla, se parte limpio
+  }
+}
 // sh abre la hoja inferior (modal), cl la cierra
 const sh = (h) => {
   $("#shc").innerHTML = h;
@@ -62,6 +106,7 @@ const lines = (l) => (l.rm || []).map((x) => `<div class="mut" style="color:var(
 
 // Dibuja la pantalla según el estado actual
 function render() {
+  guardar();
   const A = $("#app");
   if (!S.sess) {
     A.innerHTML = welcome();
@@ -365,7 +410,14 @@ setInterval(() => document.querySelectorAll("[data-t]").forEach((e) => {
 async function iniciar() {
   try { R = await cargarMenuCliente(); }
   catch (e) { toast(e.message, 1); }
-  render();
+  try { restaurar(); } catch (e) { console.error("restaurar:", e); }
+  try { render(); } catch (e) {
+    console.error("render:", e);
+    localStorage.removeItem(KEY);                // si no puede dibujar, limpia y reintenta
+    S.sess = null; S.orders = [];
+    render();
+  }
+  sincronizar();
 }
 iniciar();
 
