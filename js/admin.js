@@ -1,6 +1,6 @@
 // ===== Mesero Virtual: panel del Administrador =====
 // Tres secciones: Ventas (día, mes y año), Pedidos (activos, completados y cancelados con motivo) y Configuración (tiempos y capacidad).
-// El menú se gestiona en gestion.html. Cocina y Mostrador tienen sus propias pantallas.
+// Los datos vienen de la API (api.js). El menú se gestiona en gestion.html. Cocina y Mostrador tienen sus propias pantallas.
 const $ = (s) => document.querySelector(s);
 const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const M = (n) => "$" + Math.round(n).toLocaleString("es-CO");
@@ -11,8 +11,11 @@ const ACTIVOS = ["Enviando", "Pago no confirmado", "En espera", "En preparación
 const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 const MOTIVOS = ["Se agotó un ingrediente", "Error en el pedido", "La cocina está saturada", "Pedido duplicado"];
 const LISTAS = { activos: "Activos", completados: "Completados", cancelados: "Cancelados" };
+const ORIGEN_ADMIN = "administrador";   // ⚠ debe coincidir con el valor que acepta el backend en PATCH /pedidos/:id/cancelar
 
-let rid = R[0].id;          // restaurante de esta sesión (más adelante vendrá del login)
+let R = [];                 // restaurantes (vienen de la API)
+let PED = [];               // pedidos del restaurante actual (se refrescan desde la API)
+let rid = null;             // restaurante de esta sesión (más adelante vendrá del login)
 let seccion = "ventas";     // sección que se está viendo
 let periodo = "dia";        // dia, mes o año
 let ref = new Date();       // fecha de referencia del periodo
@@ -31,7 +34,24 @@ function toast(m, mal) {
 }
 
 const restaurante = () => R.find((r) => r.id === rid);
-const pedidos = () => cargarPedidos().filter((o) => o.rid === rid);
+const pedidos = () => PED;
+
+// Traduce un pedido de la API al formato de este panel.
+// ⚠ Los nombres de la derecha son suposiciones: si tu API los llama distinto, solo hay que ajustar esta función.
+const dePedido = (p) => ({
+    id: p.id, rid: p.restauranteId, no: p.numero, st: p.estado, total: p.total,
+    mesa: p.mesa, sesion: p.sesion, t0: p.pagadoEn || 0,
+    motivo: p.motivoCancelacion || p.motivo || "", tEntrega: p.entregadoEn || 0,
+    items: (p.items || []).map((l) => ({
+        q: l.cantidad, p: { n: l.nombre || l.productoNombre || "Producto" },
+        rm: l.quitar || [], obs: l.observacion || ""
+    }))
+});
+
+async function cargarPedidosAdmin() {
+    try { PED = (await listarPedidos(rid)).map(dePedido); }
+    catch (e) { /* sin conexión: se conserva lo último y se reintenta */ }
+}
 
 // ---------- VENTAS ----------
 // Una venta es un pedido con el pago confirmado y que no fue cancelado
@@ -133,7 +153,7 @@ function vistaPedidos() {
 
 // ---------- CANCELAR CON MOTIVO ----------
 function pedirCancelar(id) {
-    const o = cargarPedidos().find((x) => x.id === id);
+    const o = PED.find((x) => x.id === id);
     if (!o || !ACTIVOS.includes(o.st)) {
         toast("Este pedido ya no se puede cancelar.", true);
         return;
@@ -156,7 +176,7 @@ function limpiarError() {
     $("#motivo").classList.remove("bad");
 }
 
-function confirmarCancelar() {
+async function confirmarCancelar() {
     limpiarError();
     const motivo = $("#motivo").value.trim().replace(/\s+/g, " ");
     let error = "";
@@ -173,17 +193,18 @@ function confirmarCancelar() {
         $("#motivo").focus();
         return;
     }
-    const todos = cargarPedidos(), o = todos.find((x) => x.id === pendiente);
-    if (!o || !ACTIVOS.includes(o.st)) {            // pudo cambiar mientras escribías el motivo
-        toast("Este pedido ya no se puede cancelar.", true);
-    } else {
-        o.st = "Cancelado";
-        o.motivo = motivo;                          // el cliente recibe este motivo
-        o.canceladoPor = "Administrador";
-        o.tCancel = Date.now();
-        o.reembolso = o.t0 > 0;                     // si ya estaba pagado queda "Reembolso pendiente"
-        guardarPedidos(todos);
-        toast(`Pedido #${o.no} cancelado. Se avisó al cliente.`);
+    const o = PED.find((x) => x.id === pendiente), btn = $("#confirmar");
+    btn.disabled = true;
+    try {
+        if (!o || !ACTIVOS.includes(o.st)) toast("Este pedido ya no se puede cancelar.", true);
+        else {
+            await cancelarPedido(o.id, ORIGEN_ADMIN, motivo);
+            toast(`Pedido #${o.no} cancelado. Se avisó al cliente.`);
+        }
+    } catch (e) {
+        toast(e.message, true);
+    } finally {
+        btn.disabled = false;
     }
     cerrarModal();
     ultimo = "";
@@ -211,11 +232,6 @@ function vistaConfig() {
             <div class="err" id="er-cap" role="alert"></div>
             <div class="note" id="vista-previa" style="margin-top:12px"></div>
             <div class="botones"><button class="btn" data-accion="guardar">Guardar tiempos</button></div>
-        </div>
-        <div class="card">
-            <b>Datos de ejemplo para pruebas</b>
-            <p class="mut">Crea unas ventas de los últimos 13 meses para ver los reportes. Se pueden borrar sin afectar los pedidos reales.</p>
-            <div class="botones"><button class="btn alt" data-accion="demo">Cargar ventas de ejemplo</button><button class="btn alt" data-accion="borrar-demo">Borrar ventas de ejemplo</button></div>
         </div>`;
 }
 
@@ -231,7 +247,7 @@ function vistaPrevia() {
     caja.innerHTML = `<b>Así lo verá el cliente:</b> sin pedidos por delante ${f(0)} · con 3 por delante ${f(3)} · con 8 por delante ${f(8)}`;
 }
 
-function guardarConfig() {
+async function guardarConfig() {
     ["t", "cap"].forEach((c) => { $("#er-" + c).textContent = ""; $("#c-" + c).classList.remove("bad"); });
     const t = Number($("#c-t").value), cap = Number($("#c-cap").value);
     const errores = {};
@@ -244,45 +260,15 @@ function guardarConfig() {
         toast("Revisa los campos marcados en rojo.", true);
         return;
     }
-    const r = restaurante();
-    r.t = t;
-    r.cap = cap;
-    if (guardarMenu(R)) toast("Tiempos guardados ✓");
-    else toast("No se pudo guardar en este navegador.", true);
-}
-
-// Ventas de ejemplo (marcadas con demo: true para poder borrarlas)
-function cargarDemo() {
-    const productos = restaurante().P;
-    if (!productos.length) { toast("Este restaurante no tiene productos.", true); return; }
-    const todos = cargarPedidos();
-    if (todos.some((o) => o.demo && o.rid === rid)) { toast("Ya hay ventas de ejemplo. Bórralas antes de cargarlas otra vez.", true); return; }
-    let n = 0;
-    for (let dia = 400; dia >= 1; dia--) {
-        const cantidad = Math.floor(Math.random() * 5);                       // de 0 a 4 pedidos por día
-        for (let k = 0; k < cantidad; k++) {
-            const lineas = Array.from({ length: 1 + Math.floor(Math.random() * 2) }, () => {
-                const p = productos[Math.floor(Math.random() * productos.length)];
-                return { q: 1 + Math.floor(Math.random() * 2), p: { id: p.id, n: p.n, $: p.$ }, rm: [], obs: "" };
-            });
-            const f = new Date();
-            f.setDate(f.getDate() - dia);
-            f.setHours(Math.random() < 0.6 ? 12 + Math.floor(Math.random() * 3) : 18 + Math.floor(Math.random() * 3), Math.floor(Math.random() * 60), 0, 0);
-            const sesion = 5000 + n;                                                  // rango propio para no chocar con las sesiones reales
-            todos.push({ id: siguiente("pedido"), sesion, mesa: 1 + Math.floor(Math.random() * 20), rid, no: `${sesion}-R${rid}-01`, items: lineas,
-                total: lineas.reduce((s, l) => s + l.p.$ * l.q, 0), st: "Entregado", t0: f.getTime(), tListo: f.getTime() + 900000, tEntrega: f.getTime() + 960000, demo: true });
-            n++;
-        }
+    try {
+        await actualizarConfigRestaurante(rid, t, cap);
+        const r = restaurante();
+        r.t = t;
+        r.cap = cap;
+        toast("Tiempos guardados ✓");
+    } catch (e) {
+        toast(e.message, true);
     }
-    guardarPedidos(todos);
-    toast(`Se cargaron ${n} ventas de ejemplo.`);
-}
-
-function borrarDemo() {
-    const antes = cargarPedidos();
-    const quedan = antes.filter((o) => !(o.demo && o.rid === rid));
-    guardarPedidos(quedan);
-    toast(`Se borraron ${antes.length - quedan.length} ventas de ejemplo.`);
 }
 
 // ---------- PINTAR ----------
@@ -292,7 +278,9 @@ function pintar() {
     if (seccion === "config") vistaPrevia();
 }
 
-function refrescar() {
+async function refrescar() {
+    if (rid == null) return;
+    if (seccion !== "config") await cargarPedidosAdmin();
     // Configuración tiene formularios: solo se repinta cuando se entra, para no borrar lo que se está escribiendo
     const firma = seccion === "config" ? "config" + rid : JSON.stringify(pedidos()) + seccion + periodo + ref.getTime() + filtro + rid;
     if (firma !== ultimo) {
@@ -313,8 +301,6 @@ $("#contenido").addEventListener("click", (ev) => {
     else if (a === "filtro") { filtro = v; ultimo = ""; refrescar(); }
     else if (a === "cancelar") pedirCancelar(Number(b.dataset.id));
     else if (a === "guardar") guardarConfig();
-    else if (a === "demo") { cargarDemo(); ultimo = ""; refrescar(); }
-    else if (a === "borrar-demo") { borrarDemo(); ultimo = ""; refrescar(); }
 });
 $("#contenido").addEventListener("input", (ev) => { if (ev.target.id === "c-t" || ev.target.id === "c-cap") vistaPrevia(); });
 $("#secciones").addEventListener("click", (ev) => {
@@ -330,9 +316,19 @@ $("#motivos").addEventListener("click", (ev) => {
     const b = ev.target.closest("[data-motivo]");
     if (b) { $("#motivo").value = b.dataset.motivo; $("#cuenta").textContent = b.dataset.motivo.length + "/120"; limpiarError(); }
 });
-window.addEventListener("storage", (e) => { if (e.key === CLAVE_P) refrescar(); });
-setInterval(refrescar, 2000);
+setInterval(refrescar, 4000);
 
 // ---------- INICIO ----------
-$("#rest").innerHTML = R.map((r) => `<option value="${r.id}">${esc(r.n)}</option>`).join("");
-refrescar();
+async function iniciar() {
+    try {
+        R = (await listarRestaurantes()).map((r) => ({ id: r.id, n: r.nombre, t: r.tiempoPrepMin, cap: r.capacidad || 1 }));
+    } catch (e) {
+        toast(e.message, true);
+        return;
+    }
+    if (!R.length) { toast("No hay restaurantes registrados.", true); return; }
+    rid = R[0].id;
+    $("#rest").innerHTML = R.map((r) => `<option value="${r.id}">${esc(r.n)}</option>`).join("");
+    refrescar();
+}
+iniciar();

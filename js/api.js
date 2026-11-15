@@ -72,3 +72,6 @@ function leerPantallas() {
 function guardarPantallas(p) {
   try { localStorage.setItem(CLAVE_PANT, JSON.stringify(p)); return true; } catch (e) { return false; }
 }
+// ===== Administrador =====
+const actualizarConfigRestaurante = (id, tiempoPrepMin, capacidad) =>
+  pedir("/restaurantes/" + id + "/config", { method: "PATCH", body: JSON.stringify({ tiempoPrepMin, capacidad }) });
