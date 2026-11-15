@@ -14,7 +14,22 @@ export class RestauranteRepository {
     return filas.length > 0 ? this.aObjeto(filas[0]) : null;
   }
 
+  async actualizarConfig(id, tiempoPrepMin, capacidad) {
+    await this.pool.execute(
+      'UPDATE restaurantes SET tiempo_prep_min = ?, capacidad = ? WHERE id = ?',
+      [tiempoPrepMin, capacidad, id]
+    );
+    return this.buscarPorId(id);
+  }
+
   aObjeto(f) {
-    return { id: f.id, nombre: f.nombre, categoria: f.categoria, local: f.local_numero, tiempoPrepMin: f.tiempo_prep_min };
+    return {
+      id: f.id,
+      nombre: f.nombre,
+      categoria: f.categoria,
+      local: f.local_numero,
+      tiempoPrepMin: f.tiempo_prep_min,
+      capacidad: f.capacidad
+    };
   }
 }

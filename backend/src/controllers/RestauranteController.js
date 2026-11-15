@@ -12,4 +12,8 @@ export class RestauranteController {
   obtener = async (req, res, next) => {
     try { res.json(await this.servicio.obtener(req.params.id)); } catch (e) { next(e); }
   };
+
+  actualizarConfig = async (req, res, next) => {
+    try { res.json(await this.servicio.actualizarConfig(req.params.id, req.body)); } catch (e) { next(e); }
+  };
 }

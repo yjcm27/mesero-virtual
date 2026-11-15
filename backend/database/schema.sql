@@ -7,7 +7,8 @@ CREATE TABLE IF NOT EXISTS restaurantes (
   nombre VARCHAR(80) NOT NULL UNIQUE,
   categoria VARCHAR(60) NOT NULL,
   local_numero VARCHAR(20) NOT NULL,
-  tiempo_prep_min INT NOT NULL DEFAULT 15
+  tiempo_prep_min INT NOT NULL DEFAULT 15,
+  capacidad INT NOT NULL DEFAULT 1
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS productos (
