@@ -1,123 +1,168 @@
 # Mesero Virtual
 
-Sistema web de pedidos para **plazoletas de comidas**. El cliente escanea el código QR de su mesa, elige un restaurante, arma su carrito, envía el pedido y sigue su estado, todo desde el navegador del celular, sin descargar nada ni registrarse. Los restaurantes administran su menú desde un panel web.
+Sistema web de pedidos para **plazoletas de comidas**. El cliente escanea el código QR de su mesa, elige un restaurante, arma su carrito, envía el pedido y sigue su estado desde el navegador del celular, sin descargar nada ni registrarse. Cada restaurante gestiona su menú, su cocina y sus entregas desde sus propias pantallas, y el administrador consulta ventas, pedidos y configuración.
 
-**Prototipo en línea:** https://yjcm27.github.io/mesero-virtual/
-**Gestión del menú:** https://yjcm27.github.io/mesero-virtual/gestion.html
-**Cocina:** https://yjcm27.github.io/mesero-virtual/cocina.html
+> **Estado:** aplicación integrada con **frontend, backend (API REST) y base de datos MySQL**. El pago es **simulado**; todavía no hay inicio de sesión ni pasarela de pago real.
 
-> Estado: prototipo funcional de frontend. Los datos se guardan en **LocalStorage** del navegador; todavía no hay servidor ni base de datos.
+## Módulos
 
-## Qué incluye hoy
+| Módulo | Archivo | Quién lo usa | Qué hace |
+|---|---|---|---|
+| Cliente | `index.html` | Cliente en la mesa | Sesión por QR (simulado), restaurantes, menú, personalización, carrito, pago simulado, seguimiento del pedido, cancelación y alarma de pedido listo. La sesión y «Mis pedidos» sobreviven a recargar la página. |
+| Gestión del menú | `gestion.html` | Restaurante | CRUD de productos: crear, listar, editar, eliminar y marcar agotado. Valida nombre, precio, ingredientes, alérgenos y foto. |
+| Cocina | `cocina.html` | Cocina del restaurante | Muestra los pedidos pagados en orden de llegada (Por preparar, En preparación, Terminados), sin precios. Resalta las observaciones, que deben marcarse como leídas antes de iniciar la producción. |
+| Mostrador | `mostrador.html` | Encargado de entregas | Recibe los pedidos listos y los marca como **entregados**. |
+| Pantalla de pedidos listos | `listos.html` | Clientes (pantalla pública del local) | Muestra qué pedidos están listos para reclamar. Se creó para suplir la notificación que no puede enviarse en iPhone: el cliente mira la pantalla y ve si su pedido ya está listo. Se activa con una clave que se guarda en el navegador de esa pantalla. |
+| Administrador | `admin.html` | Administración | **Ventas** (por día, mes y año), **Pedidos** (activos, completados y cancelados con motivo) y **Configuración** (tiempo de preparación y capacidad de cocina). |
 
-### Interfaz del cliente (`index.html`)
-- Sesión simulada por escaneo de QR de la mesa, con número de sesión.
-- Lista de restaurantes con su categoría, calificación y tiempo estimado.
-- Menú por restaurante con filtro por categoría, fotos de los platillos y alérgenos visibles.
-- Personalización por producto según la decisión del restaurante: quitar ingredientes, solo observaciones o sin personalización.
-- Confirmación obligatoria de alérgenos antes de agregar un producto.
-- Carrito independiente por restaurante, con pago simulado.
-- Seguimiento del pedido con estados (Enviando, En espera, En preparación, Listo, Entregado), tiempo estimado, cronómetro y cancelación mientras está en espera.
-- Alarma de pedido listo, con aviso para iPhone cuando no se pueden enviar notificaciones.
-- Cierre de sesión y aviso por inactividad.
-- Modo claro y oscuro automático, con el logo en dos versiones.
+### Ciclo de un pedido
 
-### Gestión del menú del restaurante (`gestion.html`)
-CRUD completo con formulario y persistencia en LocalStorage:
-- **Crear** productos: nombre, foto, emoji, categoría, precio, descripción, ingredientes, alérgenos, modo de personalización y estado agotado.
-- **Leer**: lista con contador, búsqueda y miniaturas.
-- **Actualizar**: edición de cualquier dato, incluida la foto.
-- **Eliminar**: con confirmación.
-- Marcar un producto como agotado o disponible.
-- Los cambios se reflejan al instante en el menú del cliente.
+`Enviando` → (pago confirmado) `En espera` → `En preparación` → `Listo` → `Entregado`
 
-### Interfaz de Cocina (`cocina.html`)
-- Muestra solo los pedidos **ya pagados** del restaurante elegido, en orden de llegada, en tres listas: Por preparar, En preparación y Terminados.
-- Cada pedido indica número, mesa, sesión, productos, cantidades y cronómetro de espera. No muestra precios.
-- Las **observaciones del cliente** salen resaltadas y los ingredientes quitados aparecen como «SIN cebolla».
-- Si el pedido tiene observaciones, Cocina debe marcar **«Observación leída»** antes de poder pulsar «Iniciar producción».
-- «Marcar como listo» pasa el pedido a Terminados y dispara la alarma en la pantalla del cliente.
-- Avisa con mensaje y sonido cuando llega un pedido nuevo o el cliente cancela.
-- Se actualiza sola: cliente y Cocina comparten los pedidos por LocalStorage.
+Estados alternos: `Pago no confirmado` y `Cancelado`. El cliente solo puede cancelar mientras el pedido está en espera; el administrador puede cancelar cualquier pedido activo escribiendo un motivo.
 
-**Cómo probar el ciclo completo:** abre `index.html` y `cocina.html` en dos pestañas del mismo navegador. En el cliente, haz un pedido con una observación y pulsa «Demo: llega el comprobante». Cocina lo recibe, lo lees, lo inicias y lo marcas como listo; en el cliente suena la alarma.
+## Arquitectura
 
-### Validaciones y reglas de negocio
-- Nombre de 3 a 60 caracteres, sin repetirse dentro del mismo restaurante.
-- Precio entero mayor que 0 y hasta $500.000.
-- Al menos un ingrediente (dos si el cliente puede quitarlos).
-- Alérgenos obligatorios: se marcan los que apliquen o «Sin alérgenos», con declaración de responsabilidad del restaurante.
-- Fotos JPG, PNG o WebP de hasta 8 MB, reducidas automáticamente a 480 px.
-- Se bloquean los símbolos `<` y `>` en los textos.
-- Máximo 10 unidades por producto y 140 caracteres en las observaciones.
-- Protección contra doble envío del pedido y contra pedidos con la sesión cerrada.
-- El cliente solo puede cancelar mientras el pedido está «En espera»; si Cocina ya inició la producción, se bloquea.
-- Cocina no puede iniciar un pedido con observaciones sin marcarlas como leídas.
+```
+Navegador (HTML + CSS + JavaScript)  ──HTTP/JSON──▶  API REST (Node.js + Express)  ──SQL──▶  MySQL
+         js/api.js                                    backend/src                          mesero_virtual
+```
+
+El backend sigue una **arquitectura por capas**; cada capa tiene una sola responsabilidad:
+
+| Capa | Carpeta | Responsabilidad |
+|---|---|---|
+| Rutas | `backend/src/routes` | Define las direcciones de la API |
+| Controladores | `backend/src/controllers` | Recibe la petición HTTP y arma la respuesta |
+| Servicios | `backend/src/services` | Reglas de negocio y validaciones |
+| Repositorios | `backend/src/repositories` | Único lugar con SQL; habla con MySQL |
+| Modelos | `backend/src/models` | Estructura de los datos |
+| Errores y middlewares | `backend/src/errors`, `backend/src/middlewares` | Errores propios (400, 404, 409, 422) y manejador central |
+
+### Base de datos
+
+Cuatro tablas, definidas en `backend/database/schema.sql`: `restaurantes`, `productos`, `pedidos` y `pedido_items`. El detalle de cada pedido guarda una copia del nombre y del precio del producto en el momento de la compra.
+
+### Principales endpoints (`/api`)
+
+| Método | Ruta | Uso |
+|---|---|---|
+| GET | `/restaurantes`, `/restaurantes/:id` | Listar y consultar restaurantes |
+| PATCH | `/restaurantes/:id/config` | Cambiar tiempo de preparación y capacidad |
+| GET, POST | `/productos` | Listar (por restaurante) y crear productos |
+| PUT, DELETE | `/productos/:id` | Editar y eliminar un producto |
+| PATCH | `/productos/:id/disponibilidad` | Marcar agotado o disponible |
+| POST | `/pedidos` | Crear un pedido |
+| GET | `/pedidos`, `/pedidos/:id` | Listar (por restaurante y estado) y consultar |
+| PATCH | `/pedidos/:id/pago` | Confirmar o rechazar el pago (simulado) |
+| PATCH | `/pedidos/:id/estado` | Avanzar el estado |
+| PATCH | `/pedidos/:id/observacion-leida` | Cocina confirma que leyó las observaciones |
+| PATCH | `/pedidos/:id/cancelar` | Cancelar (cliente o administrador, con motivo) |
 
 ## Estructura del proyecto
 
 ```
 mesero-virtual/
-├── index.html        Interfaz del cliente
-├── gestion.html      Gestión del menú del restaurante
-├── cocina.html       Interfaz de Cocina
-├── css/
-│   └── styles.css    Estilos (modo claro y oscuro)
-├── js/
-│   ├── datos.js      Datos de ejemplo (4 restaurantes, 11 productos)
-│   ├── almacen.js    Lectura y escritura en LocalStorage (menú y pedidos)
-│   ├── app.js        Lógica de la interfaz del cliente
-│   ├── gestion.js    Lógica del CRUD de productos
-│   └── cocina.js     Lógica de la interfaz de Cocina
-└── img/
-    ├── logo-claro.png
-    └── logo-oscuro.png
+├── index.html · gestion.html · cocina.html · mostrador.html · listos.html · admin.html
+├── css/        styles.css, mostrador.css, admin.css
+├── js/         api.js (conexión con la API), app.js, gestion.js, cocina.js,
+│               mostrador.js, listos.js, admin.js
+├── img/        logos
+└── backend/
+    ├── database/   schema.sql
+    ├── docs/
+    ├── src/        app.js, server.js, config, routes, controllers,
+    │               services, repositories, models, middlewares, errors, utils
+    ├── test/ · testing/
+    ├── .env.example
+    └── package.json
 ```
 
-## Cómo funciona el almacenamiento
+## Requisitos
 
-El menú se guarda en LocalStorage con la clave `mv_menu`, los pedidos con `mv_pedidos` y los contadores de sesión y pedido con `mv_contadores`. Si no hay nada guardado, la aplicación parte de los datos de ejemplo de `datos.js`. El botón «Restaurar datos de ejemplo» en la gestión borra los cambios.
+- **Node.js 20.6 o superior**
+- **MySQL 8** (o MariaDB) y **MySQL Workbench**
+- **VS Code** con la extensión **Live Server**
+- Git
 
-Puedes ver los datos en el navegador con **F12 → Application → Local Storage**.
+## Instalación y ejecución
 
-Limitaciones:
-- Cada navegador y cada dispositivo tiene sus propios datos: lo que se crea en un equipo no aparece en otro.
-- LocalStorage ofrece unos 5 MB por sitio. Por eso las fotos se comprimen antes de guardarse.
-- No es un almacenamiento seguro, por lo que no se guardan contraseñas ni datos sensibles.
+### 1. Clonar el repositorio
 
-## Cómo ejecutarlo
-
-**En línea:** abre el enlace del prototipo en cualquier navegador de Android, iPhone o computador.
-
-**En tu computador:** descarga el proyecto y abre `index.html` con doble clic. Para comprobar que los datos persisten entre las dos páginas, es más fiable abrirlo con un servidor local:
-
-```
-python3 -m http.server 8000
+```bash
+git clone https://github.com/yjcm27/mesero-virtual.git
+cd mesero-virtual
 ```
 
-y entrar a `http://localhost:8000`.
+### 2. Crear la base de datos
 
-## Publicar en GitHub Pages
+1. Abre MySQL Workbench y conéctate a tu servidor local.
+2. Menú **File → Open SQL Script** y elige `backend/database/schema.sql`.
+3. Ejecuta todo el script con el ícono del rayo. Crea la base `mesero_virtual` y sus cuatro tablas.
+4. Abre y ejecuta también `backend/database/seed.sql`. Carga los datos de ejemplo: 4 restaurantes y 11 productos. Debe ejecutarse **una sola vez y después del esquema**; si lo ejecutas otra vez, MySQL responderá con un error de clave duplicada.
 
-1. Sube todo el contenido del proyecto a un repositorio público, conservando las carpetas `css/`, `js/` e `img/`.
-2. En **Settings → Pages**, elige **Deploy from a branch**, rama `main`, carpeta `/ (root)`.
-3. Espera uno o dos minutos y abre el enlace que aparece.
+### 3. Configurar las variables de entorno
 
-Para actualizar, vuelve a subir los archivos modificados.
+```bash
+cd backend
+copy .env.example .env      # en Linux/macOS: cp .env.example .env
+```
 
-## Próximos pasos
+Abre `backend/.env` y ajusta los valores a tu MySQL:
 
-- [x] Interfaz de **Cocina**: pedidos pagados en orden de llegada, observaciones resaltadas y confirmación de lectura antes de iniciar producción.
-- [ ] Interfaz de **Mostrador** y pantalla de pedidos listos por restaurante.
-- [x] Guardar los pedidos en LocalStorage para probar el ciclo completo entre pestañas.
-- [ ] Paneles de **Administrador** y **Plazoleta**: ventas, aprobación de restaurantes, mesas y códigos QR.
-- [ ] Inicio de sesión y registro de restaurantes.
-- [ ] **Servidor y base de datos MySQL** con API: datos compartidos entre dispositivos, contraseñas con hash, notificaciones de Android.
-- [ ] Pagos reales y sistema POS.
+| Variable | Significado | Ejemplo |
+|---|---|---|
+| `PORT` | Puerto de la API | `3000` |
+| `DB_HOST` | Servidor de MySQL | `localhost` |
+| `DB_PORT` | Puerto de MySQL | `3306` |
+| `DB_USER` | Usuario de MySQL | `root` |
+| `DB_PASSWORD` | Contraseña de MySQL | *(la tuya)* |
+| `DB_NAME` | Nombre de la base | `mesero_virtual` |
+
+> El archivo `.env` contiene credenciales y **no se sube al repositorio** (está en `.gitignore`).
+
+### 4. Instalar dependencias y arrancar el backend
+
+```bash
+npm install
+npm start          # o "npm run dev" para reiniciar solo al guardar cambios
+```
+
+La API queda en `http://localhost:3000/api`. Para comprobarla, abre `http://localhost:3000/api/restaurantes`: debe responder una lista de restaurantes.
+
+### 5. Abrir el frontend
+
+En VS Code, abre la carpeta raíz del proyecto, haz clic derecho sobre `index.html` y elige **Open with Live Server**. Queda en `http://127.0.0.1:5500/index.html`. Las demás pantallas se abren igual (`cocina.html`, `gestion.html`, `mostrador.html`, `listos.html`, `admin.html`).
+
+> El backend debe estar encendido; si no, el frontend muestra «No se pudo conectar con el servidor».
+
+### Probar el ciclo completo
+
+1. En `index.html` escanea el QR simulado, elige un restaurante y envía un pedido con una observación.
+2. Pulsa **Demo: llega el comprobante** para simular el pago.
+3. En `cocina.html` (mismo restaurante) marca la observación como leída, inicia la producción y marca el pedido como listo. En el cliente suena la alarma.
+4. En `mostrador.html` marca el pedido como entregado.
+5. En `admin.html` revisa el pedido en **Pedidos → Completados** y la venta en **Ventas**.
+
+## Pruebas
+
+```bash
+cd backend
+npm test
+```
+
+Las pruebas de integración de la entrega (frontend, API y base de datos) se documentan en el PDF de evidencia.
+
+## Notas y limitaciones
+
+- El **pago es simulado**: los botones «Demo» reemplazan la confirmación de un comprobante real.
+- El navegador guarda en LocalStorage únicamente la **sesión del cliente** (`mv_sesion`) y la clave de activación de la pantalla de pedidos listos. Los pedidos, el menú y los datos del restaurante viven en MySQL.
+- **GitHub Pages ya no sirve** para este proyecto, porque el frontend necesita el backend local.
+- Pendientes: inicio de sesión de restaurantes, pagos reales, notificaciones en Android y asignación de número de sesión desde el servidor.
 
 ## Tecnologías
 
-HTML, CSS y JavaScript puro, sin librerías ni dependencias. Tipografía Bricolage Grotesque (Google Fonts).
+HTML, CSS y JavaScript puro en el frontend; Node.js, Express y `mysql2` en el backend; MySQL como base de datos. Tipografía Bricolage Grotesque (Google Fonts).
 
 ## Equipo
 
@@ -126,9 +171,9 @@ HTML, CSS y JavaScript puro, sin librerías ni dependencias. Tipografía Bricola
 | Youler | Desarrollo del proyecto | [@yjcm27](https://github.com/yjcm27) |
 | Nixon | Desarrollo del proyecto | [@nicwilmer-wq](https://github.com/nicwilmer-wq) |
 
-
 ## Cómo colaborar
 
-1. Antes de subir cambios, avisa al equipo para no sobrescribir el trabajo de otra persona.
-2. Descarga la versión más reciente del repositorio y prueba tus cambios abriendo `index.html`, `gestion.html` y `cocina.html`.
-3. Sube los archivos modificados con una descripción corta de lo que cambiaste (**Commit changes**).
+1. Crea una rama desde `main` (`git checkout -b feature/nombre`).
+2. Haz commits pequeños con mensajes descriptivos (`feat:`, `fix:`, `docs:`, `chore:`).
+3. Sube la rama y abre un pull request hacia `main`.
+4. Nunca subas el archivo `.env`.
