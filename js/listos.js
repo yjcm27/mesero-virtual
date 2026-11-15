@@ -1,13 +1,13 @@
-// ===== Mesero Virtual: pantalla de pedidos listos =====
+// ===== Mesero Virtual: pantalla de pedidos listos (conectada a la API) =====
 // Muestra SOLO el número de los pedidos que están Listos en un restaurante (sin precios ni datos del cliente).
-// Solo funciona si el Mostrador la activó: la clave de la dirección debe coincidir con la guardada.
+// Solo funciona si el Mostrador la activó: la clave de la dirección debe coincidir con la guardada en este navegador.
 const $ = (s) => document.querySelector(s);
 const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
 const params = new URLSearchParams(location.search);
 const rid = Number(params.get("r"));
 const clave = params.get("t") || "";
-const restaurante = R.find((r) => r.id === rid);
+let restaurante = null;  // se llena al arrancar, con los datos de la API
 
 let conSonido = false;   // el navegador solo deja sonar tras un toque del usuario
 let conocidos = null;    // pedidos que ya estaban en pantalla (para marcar los nuevos)
@@ -33,7 +33,7 @@ function activa() {
     return !!restaurante && clave !== "" && leerPantallas()[rid] === clave;
 }
 
-function pintar() {
+async function pintar() {
     if (!activa()) {
         const texto = "Pantalla no activada. Actívala desde el Mostrador del restaurante.";
         if (ultimo !== texto) {
@@ -42,10 +42,13 @@ function pintar() {
         }
         return;
     }
-    $("#nombre").textContent = "Pedidos listos · " + restaurante.n;
-    const listos = cargarPedidos()
-        .filter((o) => o.rid === rid && o.st === "Listo")
-        .sort((a, b) => a.tListo - b.tListo);
+    $("#nombre").textContent = "Pedidos listos · " + restaurante.nombre;
+    let listos;
+    try {
+        listos = (await listarPedidos(rid, "Listo")).sort((a, b) => a.listoEn - b.listoEn);
+    } catch (e) {
+        return;   // sin conexión: se deja lo que ya se ve y se intenta de nuevo en el próximo ciclo
+    }
     const firma = JSON.stringify(listos.map((o) => o.id));
     if (firma === ultimo) {
         return;
@@ -56,7 +59,7 @@ function pintar() {
         pitido();
     }
     $("#grid").innerHTML = listos.length
-        ? listos.map((o) => `<div class="ficha ${nuevos.includes(o) ? "nueva" : ""}"><div class="num">${esc(o.no)}</div><div class="ok">✔ Listo para recoger</div></div>`).join("")
+        ? listos.map((o) => `<div class="ficha ${nuevos.includes(o) ? "nueva" : ""}"><div class="num">${esc(o.numero)}</div><div class="ok">✔ Listo para recoger</div></div>`).join("")
         : `<div class="vacio">No hay pedidos listos por ahora</div>`;
     conocidos = new Set(listos.map((o) => o.id));
 }
@@ -66,6 +69,16 @@ $("#sonido").onclick = () => {
     $("#sonido").textContent = conSonido ? "🔊 Sonido activado" : "🔇 Sonido apagado";
     pitido();
 };
-window.addEventListener("storage", (e) => { if (e.key === CLAVE_P || e.key === CLAVE_PANT) pintar(); });
-setInterval(pintar, 2000);   // respaldo por si el evento no llega
-pintar();
+window.addEventListener("storage", (e) => { if (e.key === CLAVE_PANT) { ultimo = ""; pintar(); } });
+
+async function arrancar() {
+    try {
+        restaurante = (await listarRestaurantes()).find((r) => r.id === rid) || null;
+    } catch (e) {
+        $("#grid").innerHTML = `<div id="bloqueo">${esc(e.message)}</div>`;
+        return;
+    }
+    await pintar();
+    setInterval(pintar, 3000);   // consulta la API cada 3 segundos
+}
+arrancar();
