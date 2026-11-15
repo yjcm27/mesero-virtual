@@ -60,3 +60,15 @@ const marcarObservacionLeida = (id) => pedir("/pedidos/" + id + "/observacion-le
 const cambiarEstado = (id, estado) => pedir("/pedidos/" + id + "/estado", { method: "PATCH", body: JSON.stringify({ estado }) });
 const cancelarPedido = (id, origen, motivo = "") => pedir("/pedidos/" + id + "/cancelar", { method: "PATCH", body: JSON.stringify({ origen, motivo }) });
 const obtenerPedido = (id) => pedir("/pedidos/" + id);
+
+// ===== Mostrador y pantalla de pedidos listos =====
+const listarPedidos = (rid, estado) => pedir("/pedidos?restauranteId=" + rid + (estado ? "&estado=" + encodeURIComponent(estado) : ""));
+
+// Activación de la pantalla de pedidos listos: la clave se guarda en este navegador (LocalStorage)
+const CLAVE_PANT = "mv_pantallas";
+function leerPantallas() {
+  try { return JSON.parse(localStorage.getItem(CLAVE_PANT)) || {}; } catch (e) { return {}; }
+}
+function guardarPantallas(p) {
+  try { localStorage.setItem(CLAVE_PANT, JSON.stringify(p)); return true; } catch (e) { return false; }
+}
