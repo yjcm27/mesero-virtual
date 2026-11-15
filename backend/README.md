@@ -1,6 +1,7 @@
 # Mesero Virtual — Backend (API REST)
 
 API del sistema de pedidos para plazoletas de comidas **Mesero Virtual**. Implementa los módulos de **Productos** (menú del restaurante) y **Pedidos** (ciclo del pedido que usa Cocina), con arquitectura en capas, programación orientada a objetos y persistencia en MySQL.
+> Para instalar y ejecutar todo el proyecto (frontend, backend y base de datos), consulta el [README principal](../README.md). Este documento detalla la API.
 
 ## Tecnologías
 - **Node.js 20.6 o superior** (JavaScript con módulos ES y clases)
@@ -83,6 +84,7 @@ Para desarrollo, `npm run dev` reinicia el servidor al guardar cambios.
 |---|---|---|
 | GET | `/api/restaurantes` | Lista los restaurantes |
 | GET | `/api/restaurantes/:id` | Detalle de un restaurante |
+| PATCH | `/api/restaurantes/:id/config` | Cambia `tiempoPrepMin` (1 a 120) y `capacidad` (1 a 10) de la cocina |
 
 ### Productos (CRUD)
 | Método | Ruta | Descripción |
@@ -128,4 +130,4 @@ Ejecuta 45 pruebas sobre modelos, repositorios (con su SQL real), servicios y co
 - Commits pequeños con mensajes descriptivos (ver `docs/GUIA_GIT.md`).
 
 ## Pendiente
-Autenticación y roles (hoy el origen de una cancelación se envía en el cuerpo de la petición), conexión del frontend a esta API, pagos reales y notificaciones.
+Autenticación y roles (hoy el origen de una cancelación se envía en el cuerpo de la petición), asignar el número de sesión desde el servidor, pagos reales y notificaciones en Android.
