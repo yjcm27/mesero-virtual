@@ -1,17 +1,28 @@
-// ===== Mesero Virtual: interfaz de Mostrador =====
+// ===== Mesero Virtual: interfaz de Mostrador (conectada a la API) =====
 // El Mostrador es un rol de CONSULTA: ve el estado, el tiempo estimado, el costo y los productos de cada pedido.
-// Solo puede hacer tres cosas: marcar un pedido Listo como Entregado, recordar al cliente y activar la pantalla de pedidos listos.
+// Solo puede hacer dos cosas: marcar un pedido Listo como Entregado y activar la pantalla de pedidos listos.
 const $ = (s) => document.querySelector(s);
 const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const M = (n) => "$" + n.toLocaleString("es-CO");
 
-const ESPERA_RECORDATORIO = 5 * 60 * 1000;   // el botón "Recordar" se bloquea 5 minutos tras cada uso
+// Hora de entrega: "hoy a las 3:45 p. m." si es de hoy; si es de otro día, "12 nov, 3:45 p. m."
+function horaEntrega(ms) {
+    const d = new Date(ms), hoy = new Date();
+    const h = d.toLocaleTimeString("es-CO", { hour: "numeric", minute: "2-digit" });
+    return d.toDateString() === hoy.toDateString()
+        ? "hoy a las " + h
+        : d.toLocaleDateString("es-CO", { day: "numeric", month: "short" }) + ", " + h;
+}
+
 const PESTANAS = { cocina: "En cocina", listo: "Listos", entregado: "Entregados" };
 const ESTADOS = { cocina: ["En espera", "En preparación"], listo: ["Listo"], entregado: ["Entregado"] };
 
-let rid = R[0].id;     // restaurante de este mostrador (más adelante vendrá del login)
+let R = [];            // restaurantes (vienen de la API)
+let rid = null;        // restaurante de este mostrador (más adelante vendrá del login)
 let tab = "listo";     // lista que se está viendo
+let lista = [];        // pedidos del restaurante (vienen de la API)
 let ultimo = "";       // última versión pintada (para no repintar sin necesidad)
+let sinConexion = false;
 
 // Aviso temporal
 let tt;
@@ -23,54 +34,35 @@ function toast(m, mal) {
     tt = setTimeout(() => (e.className = ""), 3000);
 }
 
-const pedidos = () => cargarPedidos().filter((o) => o.rid === rid);
 const restaurante = () => R.find((r) => r.id === rid);
 
-// Cambia un pedido directamente en LocalStorage; fn puede devolver false para cancelar el cambio
-function actualizar(id, fn) {
-    const todos = cargarPedidos(), o = todos.find((x) => x.id === id);
-    if (o && fn(o) !== false) {
-        guardarPedidos(todos);
-    }
-    refrescar();
+// Pedidos de este restaurante que el mostrador debe ver
+async function pedidos() {
+    const todos = await listarPedidos(rid);
+    const visibles = todos.filter((o) => ["En espera", "En preparación", "Listo", "Entregado"].includes(o.estado));
+    // si la lista no trae los productos de cada pedido, se piden uno por uno
+    return Promise.all(visibles.map((o) => (o.items ? o : obtenerPedido(o.id))));
 }
 
-// Mismo cálculo que ve el cliente: tiempo del restaurante + 4 minutos por cada pedido que está por delante
+// Tiempo del restaurante + 4 minutos por cada pedido que está por delante (igual que lo ve el cliente)
 function tiempoEstimado(o) {
-    const total = minutosEstimados(o);   // tiempo y capacidad configurados por el Administrador
-    const pasados = Math.floor((Date.now() - o.t0) / 60000);
+    const delante = lista.filter((x) => x.id !== o.id && x.pagadoEn < o.pagadoEn && ["En espera", "En preparación"].includes(x.estado)).length;
+    const total = restaurante().tiempoPrepMin + delante * 4;
+    const pasados = Math.floor((Date.now() - o.pagadoEn) / 60000);
     const desde = Math.max(0, total - pasados), hasta = Math.max(0, total + 4 - pasados);
     return hasta === 0 ? "ya debería estar listo" : `faltan ${desde}–${hasta} min`;
 }
 
 // ---------- ACCIONES DEL MOSTRADOR ----------
-function entregar(id) {
-    actualizar(id, (o) => {
-        if (o.st !== "Listo") {
-            toast("Solo se puede entregar un pedido que esté Listo.", true);
-            return false;
-        }
-        o.st = "Entregado";
-        o.tEntrega = Date.now();
-        toast(`Pedido #${o.no} entregado ✓`);
-    });
-}
-
-function recordar(id) {
-    actualizar(id, (o) => {
-        if (o.st !== "Listo") {
-            toast("Solo se puede recordar un pedido que esté Listo.", true);
-            return false;
-        }
-        const falta = ESPERA_RECORDATORIO - (Date.now() - (o.tRec || 0));
-        if (o.tRec && falta > 0) {
-            toast("Espera unos minutos antes de volver a recordar este pedido.", true);
-            return false;
-        }
-        o.rec = (o.rec || 0) + 1;       // el cliente detecta este número y vuelve a sonar su alarma
-        o.tRec = Date.now();
-        toast(`Se recordó al cliente del pedido #${o.no} 🔔`);
-    });
+async function entregar(id) {
+    try {
+        const r = await cambiarEstado(id, "Entregado");
+        toast(`Pedido #${r.numero} entregado ✓`);
+    } catch (e) {
+        toast(e.message, true);
+    }
+    ultimo = "";
+    await refrescar();
 }
 
 // ---------- PANTALLA DE PEDIDOS LISTOS ----------
@@ -104,25 +96,24 @@ function clase(ms) {
 }
 
 function tarjeta(o) {
-    const l = (x) => `<div class="it"><b class="price">${x.q}×</b> ${esc(x.p.n)}` + (x.rm || []).map((i) => `<div class="sin">SIN ${esc(i).toUpperCase()}</div>`).join("") + (x.obs ? `<div class="mut">Obs.: ${esc(x.obs)}</div>` : "") + `</div>`;
+    const linea = (x) => `<div class="it"><b class="price">${x.cantidad}×</b> ${esc(x.nombre)}` +
+        x.quitar.map((i) => `<div class="sin">SIN ${esc(i).toUpperCase()}</div>`).join("") +
+        (x.observacion ? `<div class="mut">Obs.: ${esc(x.observacion)}</div>` : "") + `</div>`;
     let pie = "";
-    if (o.st === "Listo") {
-        const ms = Date.now() - o.tListo, falta = ESPERA_RECORDATORIO - (Date.now() - (o.tRec || 0));
-        const bloqueado = o.tRec && falta > 0;
-        pie = `<div class="row sp"><span class="mut">Esperando que lo recojan hace</span><b class="${clase(ms)}" data-espera="${o.tListo}">0:00</b></div>` +
-            (o.rec ? `<div class="mut">Recordatorios enviados: ${o.rec}</div>` : "") +
-            `<div class="botones">
+    if (o.estado === "Listo") {
+        const ms = Date.now() - o.listoEn;
+        pie = `<div class="row sp"><span class="mut">Esperando que lo recojan hace</span><b class="${clase(ms)}" data-espera="${o.listoEn}">0:00</b></div>
+            <div class="botones">
                 <button class="btn ok" onclick="entregar(${o.id})">✔ Marcar entregado</button>
-                <button class="btn alt" data-recordar="${o.id}" data-trec="${o.tRec || 0}" ${bloqueado ? "disabled" : ""} onclick="recordar(${o.id})">🔔 Recordar al cliente</button>
             </div>`;
-    } else if (o.st === "Entregado") {
-        pie = `<div class="mut">Entregado hace <b data-t="${o.tEntrega || o.tListo}">0:00</b></div>`;
+    } else if (o.estado === "Entregado") {
+        pie = `<div class="mut">Entregado ${horaEntrega(o.entregadoEn || o.listoEn)}</div>`;
     } else {
-        pie = `<div class="row sp"><span class="mut">Tiempo estimado: <b style="color:var(--tx)">${tiempoEstimado(o)}</b></span><span class="mut">⏱ <b data-t="${o.t0}">0:00</b></span></div>`;
+        pie = `<div class="row sp"><span class="mut">Tiempo estimado: <b style="color:var(--tx)">${tiempoEstimado(o)}</b></span><span class="mut">⏱ <b data-t="${o.pagadoEn}">0:00</b></span></div>`;
     }
-    return `<div class="card"><div class="row sp"><h3>#${esc(o.no)}</h3><span class="estado" style="color:var(--${o.st === "Listo" ? "ok" : o.st === "Entregado" ? "mut" : "acc"})">${esc(o.st)}</span></div>
+    return `<div class="card"><div class="row sp"><h3>#${esc(o.numero)}</h3><span class="estado" style="color:var(--${o.estado === "Listo" ? "ok" : o.estado === "Entregado" ? "mut" : "acc"})">${esc(o.estado)}</span></div>
         <div class="mut">Mesa ${o.mesa} · Sesión #${o.sesion} · <b style="color:var(--tx)">${M(o.total)}</b></div>
-        <div style="margin-top:6px">${o.items.map(l).join("")}</div>${pie}</div>`;
+        <div style="margin-top:6px">${o.items.map(linea).join("")}</div>${pie}</div>`;
 }
 
 function pintarPantalla() {
@@ -134,22 +125,30 @@ function pintarPantalla() {
         </div>`;
 }
 
-function pintar(lista) {
-    const de = (t) => lista.filter((o) => ESTADOS[t].includes(o.st));
+function pintar(pedidosLista) {
+    const de = (t) => pedidosLista.filter((o) => ESTADOS[t].includes(o.estado));
     $("#tabs").innerHTML = Object.keys(PESTANAS).map((t) => `<button class="chip ${t === tab ? "on" : ""}" onclick="tab='${t}';ultimo='';refrescar()">${PESTANAS[t]} (${de(t).length})</button>`).join("");
     let l = de(tab);
     if (tab === "entregado") {
-        l = l.sort((a, b) => b.tEntrega - a.tEntrega).slice(0, 20);   // los más recientes primero
+        l = l.sort((a, b) => b.entregadoEn - a.entregadoEn).slice(0, 20);   // los más recientes primero
     } else {
-        l = l.sort((a, b) => (tab === "listo" ? a.tListo - b.tListo : a.t0 - b.t0));
+        l = l.sort((a, b) => (tab === "listo" ? a.listoEn - b.listoEn : a.pagadoEn - b.pagadoEn));
     }
     $("#lista").innerHTML = l.length ? l.map(tarjeta).join("") :
         `<div class="card" style="text-align:center"><div style="font-size:40px">${tab === "listo" ? "🍽️" : "✅"}</div><p class="mut">No hay pedidos en «${PESTANAS[tab]}».</p></div>`;
 }
 
-function refrescar() {
-    const lista = pedidos().filter((o) => ["En espera", "En preparación", "Listo", "Entregado"].includes(o.st));
-    // la firma incluye el minuto actual para que el tiempo estimado se actualice solo
+// Pide los pedidos a la API y repinta solo si algo cambió
+async function refrescar() {
+    try {
+        lista = await pedidos();
+        sinConexion = false;
+    } catch (e) {
+        if (!sinConexion) toast(e.message, true);
+        sinConexion = true;
+        return;
+    }
+    // la firma incluye la hora (cada 30 s) para que el tiempo estimado se actualice solo
     const firma = JSON.stringify(lista) + tab + Math.floor(Date.now() / 30000) + JSON.stringify(leerPantallas()[rid] || "");
     if (firma !== ultimo) {
         ultimo = firma;
@@ -160,12 +159,21 @@ function refrescar() {
 }
 
 // ---------- INICIO ----------
-$("#rest").innerHTML = R.map((r) => `<option value="${r.id}">${esc(r.n)}</option>`).join("");
+async function arrancar() {
+    try {
+        R = await listarRestaurantes();
+    } catch (e) {
+        return toast(e.message, true);
+    }
+    $("#rest").innerHTML = R.map((r) => `<option value="${r.id}">${esc(r.nombre)}</option>`).join("");
+    rid = R[0].id;
+    await refrescar();
+    setInterval(refrescar, 3000);   // consulta la API cada 3 segundos
+}
 $("#rest").onchange = (e) => { rid = Number(e.target.value); ultimo = ""; refrescar(); };
-window.addEventListener("storage", (e) => { if (e.key === CLAVE_P || e.key === CLAVE_PANT) refrescar(); });
-setInterval(refrescar, 2000);
+window.addEventListener("storage", (e) => { if (e.key === CLAVE_PANT) { ultimo = ""; refrescar(); } });
 
-// Cronómetros en vivo y cuenta atrás del botón "Recordar"
+// Cronómetros en vivo
 function tick() {
     const fmt = (s) => Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
     document.querySelectorAll("[data-t]").forEach((e) => { e.textContent = fmt(Math.max(0, Math.floor((Date.now() - e.dataset.t) / 1000))); });
@@ -174,17 +182,6 @@ function tick() {
         e.textContent = fmt(Math.max(0, Math.floor(ms / 1000)));
         e.className = clase(ms);
     });
-    document.querySelectorAll("[data-recordar]").forEach((b) => {
-        const falta = ESPERA_RECORDATORIO - (Date.now() - Number(b.dataset.trec));
-        if (Number(b.dataset.trec) && falta > 0) {
-            b.disabled = true;
-            b.textContent = "🔔 Disponible en " + fmt(Math.ceil(falta / 1000));
-        } else {
-            b.disabled = false;
-            b.textContent = "🔔 Recordar al cliente";
-        }
-    });
 }
 setInterval(tick, 1000);
-refrescar();
-tick();
+arrancar();
