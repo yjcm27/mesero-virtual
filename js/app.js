@@ -32,9 +32,14 @@ function guardar() {
 
 function restaurar() {
   try {
-    if (!R.length) return;                       // sin menú no se restaura nada
     const d = JSON.parse(localStorage.getItem(KEY) || "null");
-    if (!d || !d.sess) return;
+    if (!d) return;
+
+    // El contador y el cierre de sesión se restauran siempre, haya o no sesión activa
+    S.n = Math.max(S.n, d.n || 0);
+    S.closed = !!d.closed;
+
+    if (!d.sess || !R.length) return;            // sin sesión activa o sin menú no se restauran pedidos
 
     const orders = [];
     for (const o of d.orders || []) {
@@ -49,8 +54,6 @@ function restaurar() {
       });
     }
 
-    S.n = Math.max(S.n, d.n || 0);
-    S.closed = !!d.closed;
     S.sess = d.sess;
     S.orders = orders;
     S.v = orders.length ? "orders" : "rests";
