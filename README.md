@@ -3,6 +3,7 @@
 Sistema web de pedidos para **plazoletas de comidas**. El cliente escanea el código QR de su mesa, elige un restaurante, arma su carrito, envía el pedido y sigue su estado desde el navegador del celular, sin descargar nada ni registrarse. Cada restaurante gestiona su menú, su cocina y sus entregas desde sus propias pantallas, y el administrador consulta ventas, pedidos y configuración.
 
 > **Estado:** aplicación integrada con **frontend, backend (API REST) y base de datos MySQL**. El pago es **simulado**; todavía no hay inicio de sesión ni pasarela de pago real.
+> > **Aviso sobre GitHub Pages:** la versión publicada en GitHub Pages **no funciona**, porque el frontend necesita el backend y la base de datos MySQL, que corren en el computador de quien instala el proyecto. Para ver el sistema funcionando, sigue la sección [Instalación y ejecución](#instalación-y-ejecución).
 
 ## Módulos
 
