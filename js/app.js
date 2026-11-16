@@ -23,7 +23,7 @@ function guardar() {
     localStorage.setItem(KEY, JSON.stringify({
       n: S.n, closed: S.closed, sess: S.sess,
       orders: S.orders.map((o) => ({
-        id: o.id, rid: o.rid, no: o.no, total: o.total, st: o.st, t0: o.t0, al: o.al,
+        id: o.id, rid: o.rid, no: o.no, total: o.total, st: o.st, t0: o.t0, al: o.al, motivo: o.motivo || "",
         items: o.items.map((l) => ({ pid: l.p.id, q: l.q, rm: l.rm || [], obs: l.obs || "" }))
       }))
     }));
@@ -286,7 +286,7 @@ function vOrders() {
       <button class="btn demo full" onclick="adv(${o.id})">▶ Demo: llega el comprobante</button>
       <button class="btn demo full" onclick="nopay(${o.id})">▶ Demo: pasan 5 min sin comprobante</button>` : "") + (o.st === "Pago no confirmado" ? `
         <div class="note">No pudimos confirmar el pago. Puedes reintentar sin duplicar el pedido.</div><button class="btn full" onclick="retry(${o.id})">Reintentar pago</button>` : "") + (o.st === "En espera" ? `
-          <button class="btn alt full" onclick="cancel(${o.id})">Cancelar pedido</button>` : "") + (o.st === "Cancelado" ? `<div class="mut">Reembolso pendiente.</div>` : "") + (o.st === "Listo" ? `<div class="note" style="border-color:var(--ok)">✅ ¡Tu pedido está listo! Pasa por él al restaurante.</div>` : "") + (S.plat === "android" && (w || o.st === "Enviando") ? `
+          <button class="btn alt full" onclick="cancel(${o.id})">Cancelar pedido</button>` : "") + (o.st === "Cancelado" ? `<div class="note" style="border-color:var(--red)">${o.motivo ? "Motivo: " + esc(o.motivo) + "<br>" : ""}Reembolso pendiente.</div>` : "") + (o.st === "Listo" ? `<div class="note" style="border-color:var(--ok)">✅ ¡Tu pedido está listo! Pasa por él al restaurante.</div>` : "") + (S.plat === "android" && (w || o.st === "Enviando") ? `
           <button class="btn ${o.al ? "ok" : "alt"} full" onclick="o_al(${o.id})">${o.al ? "🔔 Aviso activado (se repite 2–3 veces, cada 30 s)" : "🔔 Avísame cuando esté listo"}</button>` : "") + `</div>`;
   }).join("") : `<div class="card" style="text-align:center"><div style="font-size:40px">🧾</div><p class="mut">Aún no tienes pedidos en esta sesión.</p></div>`);
 }
@@ -434,6 +434,7 @@ async function sincronizar() {
       const r = await obtenerPedido(o.id);
       if (r.estado !== o.st) {
         o.st = r.estado;
+        if (r.motivoCancelacion) o.motivo = r.motivoCancelacion;
         if (r.pagadoEn) o.t0 = r.pagadoEn;
         cambio = true;
         if (o.st === "Listo") ring(o);
